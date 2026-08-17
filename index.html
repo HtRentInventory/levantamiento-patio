@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16232B">
+<title>Levantamiento de Patio — HT Rent</title>
+<link rel="manifest" href="manifest.json">
+<style>
+:root{
+  --bg:#E9EAE5; --panel:#FFFFFF; --panel2:#F4F5F1;
+  --ink:#11181D; --muted:#63707A; --line:#D3D8D2;
+  --amber:#E08A00; --amber-soft:#FDF1DC;
+  --steel:#16232B; --steel-2:#22333D;
+  --ok:#17795A; --ok-soft:#E2F2EB;
+  --bad:#B3261E; --bad-soft:#FBE7E5;
+  --warn:#B45309;
+  --r:10px;
+  --display:ui-sans-serif,"Archivo Narrow","Roboto Condensed","Segoe UI",system-ui,sans-serif;
+  --body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"Roboto Mono","SFMono-Regular",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--ink);font-family:var(--body);
+  font-size:16px;line-height:1.45;padding-bottom:86px;
+  overscroll-behavior-y:contain;
+}
+.wrap{max-width:600px;margin:0 auto;padding:0 12px}
+
+/* ---------- Encabezado: banda de cinta reflejante ---------- */
+header{background:var(--steel);color:#fff;position:sticky;top:0;z-index:40}
+.tape{height:8px;background:repeating-linear-gradient(115deg,var(--amber) 0 14px,#2B3A44 14px 28px)}
+.hbar{display:flex;align-items:center;gap:10px;padding:10px 12px;max-width:600px;margin:0 auto}
+.hbar h1{font-family:var(--display);font-size:15px;letter-spacing:.10em;text-transform:uppercase;margin:0;font-weight:800}
+.hbar .sub{font-size:11.5px;color:#9FB2BD;letter-spacing:.04em;margin-top:1px}
+.hbar .right{margin-left:auto;text-align:right;font-family:var(--mono);font-size:11px;color:#9FB2BD}
+.progress{height:5px;background:#2B3A44}
+.progress > i{display:block;height:100%;background:var(--amber);width:0;transition:width .3s}
+
+/* ---------- Barra inferior ---------- */
+nav.tabs{
+  position:fixed;left:0;right:0;bottom:0;z-index:50;background:var(--steel);
+  display:grid;grid-template-columns:repeat(4,1fr);
+  padding-bottom:env(safe-area-inset-bottom);border-top:1px solid #2B3A44
+}
+nav.tabs button{
+  background:none;border:0;color:#8FA3AF;padding:9px 4px 10px;font-family:var(--display);
+  font-size:11px;letter-spacing:.09em;text-transform:uppercase;font-weight:700;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:3px
+}
+nav.tabs button svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.7}
+nav.tabs button.on{color:var(--amber)}
+
+/* ---------- Bloques ---------- */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin:12px 0}
+.card.tight{padding:10px}
+h2.sec{font-family:var(--display);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:18px 0 8px;font-weight:800}
+.eyebrow{font-family:var(--display);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:800}
+label{display:block;font-size:12px;font-weight:700;letter-spacing:.02em;color:var(--muted);margin:10px 0 4px;text-transform:uppercase}
+input,select,textarea{
+  width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;
+  font-size:16px;font-family:inherit;color:var(--ink)
+}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--amber);outline-offset:1px;border-color:var(--amber)}
+textarea{min-height:70px;resize:vertical}
+.mono{font-family:var(--mono)}
+input.mono{letter-spacing:.06em}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sp{flex:1}
+.hint{font-size:12px;color:var(--muted);margin:6px 0 0}
+
+/* ---------- Botones ---------- */
+button.btn{
+  font-family:var(--display);font-size:13px;letter-spacing:.07em;text-transform:uppercase;font-weight:800;
+  padding:12px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer
+}
+button.btn.primary{background:var(--amber);border-color:var(--amber);color:#241503}
+button.btn.dark{background:var(--steel);border-color:var(--steel);color:#fff}
+button.btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+button.btn.bad{background:var(--bad);border-color:var(--bad);color:#fff}
+button.btn.ghost{background:transparent}
+button.btn.sm{padding:8px 10px;font-size:11.5px}
+button.btn:disabled{opacity:.45}
+button.btn.wide{width:100%}
+.btnrow{display:flex;gap:8px}
+.btnrow > *{flex:1}
+
+/* ---------- Chips / estados ---------- */
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{
+  border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 12px;font-size:12.5px;
+  font-weight:700;cursor:pointer;white-space:nowrap
+}
+.chip.on{background:var(--steel);border-color:var(--steel);color:#fff}
+.chip .n{font-family:var(--mono);opacity:.7;margin-left:4px}
+.tag{display:inline-flex;align-items:center;gap:5px;font-family:var(--display);font-size:10.5px;font-weight:800;
+  letter-spacing:.1em;text-transform:uppercase;padding:4px 8px;border-radius:4px;border:1px solid}
+.t-pend{background:#EEF0EC;border-color:#D3D8D2;color:#5B676F}
+.t-enc{background:var(--ok-soft);border-color:#B7DDCD;color:var(--ok)}
+.t-falt{background:var(--bad-soft);border-color:#F0C4C0;color:var(--bad)}
+.t-exc{background:var(--amber-soft);border-color:#F2D9A8;color:#8A5300}
+
+/* ---------- Lista de equipos ---------- */
+.item{
+  background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--line);
+  border-radius:var(--r);padding:11px 12px;margin-bottom:8px;cursor:pointer;display:block;width:100%;text-align:left
+}
+.item.pendiente{border-left-color:#B9C1BA}
+.item.encontrado{border-left-color:var(--ok)}
+.item.faltante{border-left-color:var(--bad)}
+.item.excedente{border-left-color:var(--amber)}
+.item .niv{font-family:var(--mono);font-size:14.5px;font-weight:700;letter-spacing:.04em;word-break:break-all}
+.item .meta{font-size:12.5px;color:var(--muted);margin-top:3px}
+.item .foot{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+.count{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+
+/* ---------- Ficha (pantalla completa) ---------- */
+.sheet{position:fixed;inset:0;background:var(--bg);z-index:60;overflow-y:auto;display:none}
+.sheet.open{display:block}
+.sheet-head{position:sticky;top:0;background:var(--steel);color:#fff;z-index:5}
+.sheet-head .hbar h1{font-size:13px}
+.sheet-body{max-width:600px;margin:0 auto;padding:0 12px 120px}
+.sheet-foot{
+  position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);
+  padding:10px 12px calc(10px + env(safe-area-inset-bottom));z-index:61
+}
+.sheet-foot .inner{max-width:600px;margin:0 auto;display:flex;gap:8px}
+.sheet-foot .inner > *{flex:1}
+
+/* ---------- Fotos ---------- */
+.angles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.angle{
+  border:1px dashed var(--line);border-radius:8px;background:var(--panel2);padding:8px 6px;text-align:center;
+  cursor:pointer;position:relative;min-height:86px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px
+}
+.angle.has{border-style:solid;border-color:var(--ok);background:#fff}
+.angle .lbl{font-size:11px;font-weight:700;line-height:1.2;color:var(--muted)}
+.angle.has .lbl{color:var(--ink)}
+.angle .badge{position:absolute;top:-7px;right:-7px;background:var(--ok);color:#fff;font-family:var(--mono);
+  font-size:11px;font-weight:700;border-radius:999px;min-width:20px;height:20px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.angle img{width:100%;height:52px;object-fit:cover;border-radius:5px}
+.angle svg{width:22px;height:22px;stroke:var(--muted);fill:none;stroke-width:1.6}
+.thumbs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
+.thumb{position:relative}
+.thumb img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.thumb button{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:999px;border:0;
+  background:var(--bad);color:#fff;font-size:13px;line-height:1;cursor:pointer}
+
+/* ---------- Adicionales ---------- */
+.add-row{border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px;background:var(--panel2)}
+.add-row .top{display:flex;align-items:center;gap:8px}
+.add-row .nom{font-weight:700;font-size:14px}
+.add-row .qty{font-family:var(--mono);font-weight:700;background:var(--steel);color:#fff;border-radius:5px;padding:2px 7px;font-size:13px}
+.stepper{display:flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
+.stepper button{width:42px;height:42px;border:0;background:#fff;font-size:20px;cursor:pointer;color:var(--ink)}
+.stepper input{width:56px;border:0;text-align:center;font-family:var(--mono);font-weight:700;padding:0}
+
+/* ---------- Varios ---------- */
+.banner{border-radius:var(--r);padding:11px 12px;font-size:13px;margin:12px 0;border:1px solid}
+.b-warn{background:var(--amber-soft);border-color:#F0D9AC;color:#7A4A00}
+.b-info{background:#E9EFF2;border-color:#CBDAE1;color:#2C4551}
+.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center}
+.kpi div{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 4px}
+.kpi b{display:block;font-family:var(--mono);font-size:19px;line-height:1.1}
+.kpi span{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+.empty{text-align:center;color:var(--muted);padding:34px 16px;font-size:14px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:96px;background:var(--steel);color:#fff;
+  padding:11px 16px;border-radius:8px;font-size:13.5px;z-index:200;max-width:92%;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.hidden{display:none!important}
+table.mini{width:100%;border-collapse:collapse;font-size:13px}
+table.mini td{padding:6px 4px;border-bottom:1px solid var(--line)}
+table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:700}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="tape"></div>
+  <div class="hbar">
+    <div>
+      <h1>Levantamiento de patio</h1>
+      <div class="sub" id="hSub">Sin sesión activa</div>
+    </div>
+    <div class="right" id="hCount"></div>
+  </div>
+  <div class="progress"><i id="hBar"></i></div>
+</header>
+
+<main class="wrap">
+  <div id="view-equipos"></div>
+  <div id="view-sueltos" class="hidden"></div>
+  <div id="view-reporte" class="hidden"></div>
+  <div id="view-sesion" class="hidden"></div>
+</main>
+
+<nav class="tabs">
+  <button data-tab="equipos" class="on"><svg viewBox="0 0 24 24"><path d="M2 16V7h11v9M13 10h4l3 3v3M2 16h2m5 0h6m4 0h1"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg>Equipos</button>
+  <button data-tab="sueltos"><svg viewBox="0 0 24 24"><circle cx="8" cy="12" r="5"/><circle cx="8" cy="12" r="1.6"/><path d="M15 8h5M15 12h5M15 16h5"/></svg>Sueltos</button>
+  <button data-tab="reporte"><svg viewBox="0 0 24 24"><path d="M5 3h9l5 5v13H5z"/><path d="M14 3v5h5M8 13h8M8 17h5"/></svg>Reporte</button>
+  <button data-tab="sesion"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10l2 2M19 5l-2 2M7 17l-2 2"/></svg>Sesión</button>
+</nav>
+
+<!-- Ficha de equipo -->
+<section class="sheet" id="sheetEquipo">
+  <div class="sheet-head">
+    <div class="tape"></div>
+    <div class="hbar">
+      <button class="btn sm ghost" style="color:#fff;border-color:#3A4A55" onclick="cerrarFicha()">← Volver</button>
+      <div class="sp"></div>
+      <div class="right" id="fichaTag"></div>
+    </div>
+  </div>
+  <div class="sheet-body" id="fichaBody"></div>
+  <div class="sheet-foot"><div class="inner">
+    <button class="btn bad" id="btnFaltante" onclick="marcarFaltante()">No localizado</button>
+    <button class="btn ok" onclick="guardarFicha(true)">Confirmar en patio</button>
+  </div></div>
+</section>
+
+<!-- Ficha de adicional suelto -->
+<section class="sheet" id="sheetSuelto">
+  <div class="sheet-head">
+    <div class="tape"></div>
+    <div class="hbar">
+      <button class="btn sm ghost" style="color:#fff;border-color:#3A4A55" onclick="cerrarSuelto()">← Volver</button>
+      <div class="sp"></div>
+      <div class="right">Adicional suelto</div>
+    </div>
+  </div>
+  <div class="sheet-body" id="sueltoBody"></div>
+  <div class="sheet-foot"><div class="inner">
+    <button class="btn ghost" onclick="borrarSuelto()">Eliminar</button>
+    <button class="btn ok" onclick="guardarSuelto()">Guardar y cerrar</button>
+  </div></div>
+</section>
+
+<input type="file" id="fileFoto" accept="image/*" capture="environment" multiple class="hidden">
+<input type="file" id="fileExcel" accept=".xlsx,.xlsm,.xls,.csv" class="hidden">
+<input type="file" id="fileJson" accept=".json" class="hidden">
+
+<script>
+/* =====================================================================
+   LEVANTAMIENTO DE INVENTARIO EN PATIO — HT Rent
+   App móvil offline (PWA). Datos en IndexedDB del dispositivo.
+   ===================================================================== */
+
+/* ------------------------- CATÁLOGOS EDITABLES ---------------------- */
+const CAT = {
+  patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
+           "Aligar Manzanillo","JJ Manzanillo","Delfín Manzanillo","Lázaro Cárdenas",
+           "JJ Veracruz","Fernández Veracruz","JJ Altamira","Otro"],
+  tipos: ["Portacontenedor 40/20","Portacontenedor 20","Plataforma Alta","Plataforma Baja","Dolly","Góndola",
+          "Volteo","Tanque","Lowboy","Caja Seca","Refrigerado","Jaula","Cuello Ganso","Otro"],
+  marcas: ["Forzaco","Atro","Wabash","Utility","Great Dane","Hyundai","Vanguard","Fruehauf","Lufkin","Otro"],
+  estatusFisico: ["Operativo","Requiere reparación menor","Requiere reparación mayor","Siniestrado","Fuera de operación"],
+  condiciones: ["Nuevo","Usado - Bueno","Usado - Regular","Usado - Malo","Chatarra"],
+  unidades: ["Pieza","Juego","Par","Metro","Kg"],
+  adicionales: ["Llantas","Rines","Ejes","Eje retráctil","Conchas","Winches","Patines (landing gear)",
+                "Suspensión de aire","Bolsas de aire","Portallanta","Llanta de refacción","Perno rey / King pin",
+                "Tanque de aire","Cadenas","Templetes / Barras","Lona","Ganchos","Defensa trasera","Guardafangos",
+                "Caja de herramienta","Sistema ABS","Mangueras / Chicotes","Puertas","Escalera","Otro"],
+  angulos: ["Frontal","Lateral izquierdo","Lateral derecho","Trasera","NIV grabado","Placas",
+            "Piso / plataforma","Ejes y suspensión","Llantas","Adicionales","Daños","Otra"],
+  motivosFaltante: ["No se encontró en patio","Entregado a cliente","En tránsito / salió del patio",
+                    "En taller externo","Ubicación distinta a la del listado","Otro"],
+  angulosSuelto: ["Vista general","Lateral","Etiqueta / medida","Estado de desgaste","Lote completo","Otra"]
+};
+
+/* ------------------------------ UTILS ------------------------------- */
+const $  = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+const esc = s => String(s??"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm = s => String(s??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().replace(/[^A-Z0-9]/g," ").replace(/\s+/g," ").trim();
+const hoy = () => new Date().toISOString().slice(0,10);
+const stamp = () => new Date().toLocaleString('es-MX',{hour12:false});
+function toast(msg, ms=2400){
+  const t = document.createElement('div'); t.className='toast'; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(), ms);
+}
+function opciones(arr, sel){ return arr.map(v=>`<option value="${esc(v)}"${norm(v)===norm(sel)?' selected':''}>${esc(v)}</option>`).join(''); }
+
+/* ------------------------- ALMACENAMIENTO --------------------------- */
+const STORES = ['kv','equipos','sueltos','fotos'];
+let DB = null, MEM = null;
+
+function abrirDB(){
+  return new Promise(res=>{
+    let ok = false;
+    try{
+      const req = indexedDB.open('ht_levantamiento_patio', 1);
+      req.onupgradeneeded = e => {
+        const d = e.target.result;
+        if(!d.objectStoreNames.contains('kv'))      d.createObjectStore('kv',{keyPath:'k'});
+        if(!d.objectStoreNames.contains('equipos')) d.createObjectStore('equipos',{keyPath:'id'});
+        if(!d.objectStoreNames.contains('sueltos')) d.createObjectStore('sueltos',{keyPath:'id'});
+        if(!d.objectStoreNames.contains('fotos'))   d.createObjectStore('fotos',{keyPath:'id'});
+      };
+      req.onsuccess = e => { ok=true; DB = e.target.result; res(true); };
+      req.onerror   = () => { if(!ok){ MEM = memoria(); res(false); } };
+      setTimeout(()=>{ if(!ok && !DB){ MEM = memoria(); res(false); } }, 2500);
+    }catch(err){ MEM = memoria(); res(false); }
+  });
+}
+function memoria(){ const m={}; STORES.forEach(s=>m[s]=new Map()); return m; }
+
+const store = {
+  put(s, obj){
+    if(MEM){ MEM[s].set(obj.id ?? obj.k, obj); return Promise.resolve(); }
+    return new Promise((res,rej)=>{ const t=DB.transaction(s,'readwrite'); t.objectStore(s).put(obj); t.oncomplete=res; t.onerror=rej; });
+  },
+  del(s, k){
+    if(MEM){ MEM[s].delete(k); return Promise.resolve(); }
+    return new Promise((res,rej)=>{ const t=DB.transaction(s,'readwrite'); t.objectStore(s).delete(k); t.oncomplete=res; t.onerror=rej; });
+  },
+  all(s){
+    if(MEM) return Promise.resolve(Array.from(MEM[s].values()));
+    return new Promise((res,rej)=>{ const r=DB.transaction(s,'readonly').objectStore(s).getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=rej; });
+  },
+  get(s, k){
+    if(MEM) return Promise.resolve(MEM[s].get(k));
+    return new Promise((res,rej)=>{ const r=DB.transaction(s,'readonly').objectStore(s).get(k); r.onsuccess=()=>res(r.result); r.onerror=rej; });
+  },
+  clear(s){
+    if(MEM){ MEM[s].clear(); return Promise.resolve(); }
+    return new Promise((res,rej)=>{ const t=DB.transaction(s,'readwrite'); t.objectStore(s).clear(); t.oncomplete=res; t.onerror=rej; });
+  }
+};
+
+/* --------------------------- ESTADO GLOBAL -------------------------- */
+const S = {
+  sesion: null,        // {patio, fecha, responsables, notas}
+  equipos: [],         // registros de equipo (padrón + manuales)
+  sueltos: [],
+  fotos: [],           // {id, refId, angulo, nombre, thumb, blob, ts}
+  filtro: 'todos',
+  busca: '',
+  tab: 'equipos',
+  fichaId: null,
+  sueltoId: null
+};
+
+const nuevoEquipo = o => Object.assign({
+  id: uid(), origen:'manual', estado:'excedente', niv:'', economico:'', tipo:'', marca:'', modelo:'', anio:'',
+  placas:'', ejes:'', medidaLlantas:'', zona:'', estatusFisico:'', obs:'', motivoFaltante:'',
+  adicionales:[], gps:null, capturadoPor:'', ts:'', padron:{}
+}, o||{});
+
+const nuevoSuelto = o => Object.assign({
+  id: uid(), tipo:'', descripcion:'', marca:'', medida:'', cantidad:1, unidad:'Pieza',
+  condicion:'Usado - Bueno', zona:'', propietario:'', obs:'', ts:''
+}, o||{});
+
+/* --------------------------- CARGA INICIAL -------------------------- */
+async function cargarTodo(){
+  const kv = await store.get('kv','sesion');
+  S.sesion = (kv && kv.v) || null;
+  S.equipos = await store.all('equipos');
+  S.sueltos = await store.all('sueltos');
+  S.fotos   = (await store.all('fotos')).map(f=>({id:f.id, refId:f.refId, refTipo:f.refTipo, angulo:f.angulo, nombre:f.nombre, thumb:f.thumb, ts:f.ts}));
+  S.equipos.sort((a,b)=> (a.economico||a.niv||'').localeCompare(b.economico||b.niv||''));
+}
+const guardarSesion = () => store.put('kv',{k:'sesion', v:S.sesion});
+const fotosDe = id => S.fotos.filter(f=>f.refId===id);
+const contarFotos = id => fotosDe(id).length;
+
+/* ------------------------------ CONTEOS ----------------------------- */
+function conteos(){
+  const c = {total:S.equipos.length, pendiente:0, encontrado:0, faltante:0, excedente:0};
+  S.equipos.forEach(e=>c[e.estado]++);
+  return c;
+}
+function pintarHeader(){
+  const c = conteos();
+  const verificados = c.encontrado + c.faltante + c.excedente;
+  $('#hSub').textContent = S.sesion ? `${S.sesion.patio} · ${S.sesion.fecha}` : 'Sin sesión activa — abre la pestaña Sesión';
+  $('#hCount').innerHTML = S.sesion ? `${verificados}/${c.total}<br><span style="opacity:.7">revisados</span>` : '';
+  $('#hBar').style.width = c.total ? (verificados/c.total*100)+'%' : '0%';
+}
+
+/* ======================= VISTA: LISTA DE EQUIPOS ===================== */
+function vistaEquipos(){
+  const c = conteos();
+  if(!S.sesion){
+    $('#view-equipos').innerHTML = `<div class="empty">Primero abre una sesión de levantamiento en la pestaña <b>Sesión</b>.</div>`;
+    return;
+  }
+  const filtros = [
+    ['todos','Todos',c.total],['pendiente','Por revisar',c.pendiente],['encontrado','Encontrados',c.encontrado],
+    ['faltante','No localizados',c.faltante],['excedente','Excedentes',c.excedente]
+  ];
+  let lista = S.equipos.filter(e=>{
+    if(S.filtro!=='todos' && e.estado!==S.filtro) return false;
+    if(!S.busca) return true;
+    const q = norm(S.busca);
+    return [e.niv,e.economico,e.placas,e.tipo,e.marca,e.zona].some(v=>norm(v).includes(q));
+  });
+  $('#view-equipos').innerHTML = `
+    <div class="row" style="margin-top:12px">
+      <input id="qBusca" placeholder="Buscar NIV, económico, placas…" value="${esc(S.busca)}" style="flex:1">
+      <button class="btn primary" onclick="abrirFicha(null)">+ Equipo</button>
+    </div>
+    <div class="chips" style="margin:10px 0">
+      ${filtros.map(([k,t,n])=>`<button class="chip ${S.filtro===k?'on':''}" onclick="setFiltro('${k}')">${t}<span class="n">${n}</span></button>`).join('')}
+    </div>
+    ${lista.length ? lista.map(itemEquipo).join('') :
+      `<div class="empty">${S.equipos.length ? 'Ningún equipo con ese filtro.' : 'Carga tu lista desde Excel en la pestaña Sesión, o agrega equipos manualmente.'}</div>`}
+    <div style="height:20px"></div>`;
+  const q = $('#qBusca');
+  q.oninput = e => { S.busca = e.target.value; const p=e.target.selectionStart; vistaEquipos(); const n=$('#qBusca'); n.focus(); n.setSelectionRange(p,p); };
+}
+function itemEquipo(e){
+  const tags = {pendiente:['t-pend','Por revisar'],encontrado:['t-enc','Encontrado'],faltante:['t-falt','No localizado'],excedente:['t-exc','Excedente']}[e.estado];
+  const nf = contarFotos(e.id), na = e.adicionales.reduce((s,a)=>s+(+a.cantidad||0),0);
+  return `<button class="item ${e.estado}" onclick="abrirFicha('${e.id}')">
+    <div class="niv">${esc(e.niv || '(sin NIV)')}</div>
+    <div class="meta">${esc([e.economico,e.tipo,e.marca,e.anio].filter(Boolean).join(' · ')) || 'Sin datos capturados'}</div>
+    <div class="foot">
+      <span class="tag ${tags[0]}">${tags[1]}</span>
+      ${e.origen==='padron'?'':'<span class="tag t-exc">Manual</span>'}
+      <span class="sp"></span>
+      <span class="count">${na} adic · ${nf} fotos</span>
+    </div></button>`;
+}
+function setFiltro(f){ S.filtro=f; vistaEquipos(); }
+
+/* ===================== VISTA: ADICIONALES SUELTOS ==================== */
+function vistaSueltos(){
+  if(!S.sesion){ $('#view-sueltos').innerHTML = `<div class="empty">Abre una sesión primero.</div>`; return; }
+  const totalPz = S.sueltos.reduce((s,x)=>s+(+x.cantidad||0),0);
+  $('#view-sueltos').innerHTML = `
+    <div class="banner b-info" style="margin-top:12px">Stock que está en el patio y <b>no</b> pertenece a ningún equipo: llantas, ejes, eje retráctil, conchas, winches, etc.</div>
+    <div class="row"><div class="eyebrow">${S.sueltos.length} registros · ${totalPz} piezas</div><div class="sp"></div>
+      <button class="btn primary" onclick="abrirSuelto(null)">+ Adicional</button></div>
+    <div style="margin-top:10px">
+    ${S.sueltos.length ? S.sueltos.map(s=>`
+      <button class="item excedente" onclick="abrirSuelto('${s.id}')">
+        <div class="row"><span class="niv" style="font-size:15px">${esc(s.tipo||'Sin tipo')}</span>
+          <span class="sp"></span><span class="qty" style="font-family:var(--mono);font-weight:700">${esc(s.cantidad)} ${esc(s.unidad)}</span></div>
+        <div class="meta">${esc([s.marca,s.medida,s.condicion,s.zona].filter(Boolean).join(' · '))||'—'}</div>
+        <div class="foot"><span class="count">${contarFotos(s.id)} fotos</span></div>
+      </button>`).join('') : `<div class="empty">Sin adicionales sueltos registrados.</div>`}
+    </div><div style="height:20px"></div>`;
+}
+
+/* ========================== VISTA: SESIÓN ============================ */
+function vistaSesion(){
+  const s = S.sesion;
+  $('#view-sesion').innerHTML = `
+    <h2 class="sec">Sesión de levantamiento</h2>
+    <div class="card">
+      <label>Patio</label>
+      <select id="sPatio">${opciones(CAT.patios, s?s.patio:'')}</select>
+      <div class="grid2">
+        <div><label>Fecha</label><input type="date" id="sFecha" value="${esc(s?s.fecha:hoy())}"></div>
+        <div><label>Responsables</label><input id="sResp" value="${esc(s?s.responsables:'')}" placeholder="Rogelio / Aldair"></div>
+      </div>
+      <label>Notas de la visita</label>
+      <textarea id="sNotas" placeholder="Condiciones, accesos, apoyo del patio…">${esc(s?s.notas:'')}</textarea>
+      <div style="height:12px"></div>
+      <button class="btn dark wide" onclick="guardarDatosSesion()">${s?'Actualizar sesión':'Abrir sesión'}</button>
+    </div>
+
+    <h2 class="sec">Lista a validar (padrón)</h2>
+    <div class="card">
+      <p class="hint" style="margin-top:0">Carga tu Excel de inventario. Se detecta la hoja <b>INV</b> y la fila de encabezados automáticamente; después eliges la ubicación que vas a levantar.</p>
+      <div class="btnrow">
+        <button class="btn primary" onclick="$('#fileExcel').click()">Cargar Excel</button>
+        <button class="btn ghost" onclick="limpiarPadron()">Quitar padrón</button>
+      </div>
+      <div id="padronInfo" style="margin-top:10px"></div>
+    </div>
+
+    <h2 class="sec">Respaldo y equipos de trabajo</h2>
+    <div class="card">
+      <p class="hint" style="margin-top:0">Si levantan en dos celulares, cada quien exporta su respaldo y luego se importa en un solo dispositivo: los registros se combinan sin duplicar.</p>
+      <div class="btnrow" style="margin-bottom:8px">
+        <button class="btn" onclick="exportarJSON()">Exportar respaldo</button>
+        <button class="btn" onclick="$('#fileJson').click()">Importar respaldo</button>
+      </div>
+      <button class="btn ghost wide" onclick="borrarTodo()">Borrar todo y empezar de cero</button>
+      <div id="infoAlmacen" class="hint" style="margin-top:10px"></div>
+    </div>
+    <div style="height:20px"></div>`;
+  pintarPadronInfo(); infoAlmacenamiento();
+}
+function pintarPadronInfo(){
+  const el = $('#padronInfo'); if(!el) return;
+  const p = S.equipos.filter(e=>e.origen==='padron').length;
+  const m = S.equipos.filter(e=>e.origen==='manual').length;
+  el.innerHTML = p||m
+    ? `<table class="mini"><tr><td>Equipos cargados del listado</td><td>${p}</td></tr><tr><td>Agregados manualmente</td><td>${m}</td></tr></table>`
+    : `<div class="hint">Todavía no hay listado cargado.</div>`;
+}
+async function infoAlmacenamiento(){
+  const el = $('#infoAlmacen'); if(!el) return;
+  let txt = MEM ? '⚠ Este entorno no permite guardar en el dispositivo: los datos se pierden al cerrar. Descarga los archivos y publícalos (GitHub Pages) para uso real en patio.' : '';
+  if(navigator.storage && navigator.storage.estimate){
+    try{ const q = await navigator.storage.estimate();
+      txt += ` Espacio usado: ${(q.usage/1048576).toFixed(1)} MB de ~${(q.quota/1048576).toFixed(0)} MB disponibles.`;
+    }catch(e){}
+  }
+  el.textContent = txt;
+}
+async function guardarDatosSesion(){
+  S.sesion = { patio:$('#sPatio').value, fecha:$('#sFecha').value||hoy(),
+               responsables:$('#sResp').value.trim(), notas:$('#sNotas').value.trim() };
+  await guardarSesion(); pintarHeader(); toast('Sesión guardada');
+}
+
+/* ========================= FICHA DE EQUIPO =========================== */
+function abrirFicha(id){
+  if(!S.sesion){ toast('Abre una sesión primero'); return; }
+  let e = id ? S.equipos.find(x=>x.id===id) : null;
+  if(!e){ e = nuevoEquipo({zona:'', capturadoPor: S.sesion.responsables||''}); S.equipos.push(e); }
+  S.fichaId = e.id;
+  pintarFicha();
+  $('#sheetEquipo').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+async function cerrarFicha(){
+  const e = leerCampos();
+  if(e){
+    const vacio = !e.niv && !e.economico && !e.adicionales.length && !contarFotos(e.id) && !e.obs;
+    if(e.origen==='manual' && vacio){ S.equipos = S.equipos.filter(x=>x.id!==e.id); await store.del('equipos', e.id); }
+    else await store.put('equipos', e);
+  }
+  $('#sheetEquipo').classList.remove('open'); document.body.style.overflow='';
+  S.fichaId=null; render();
+}
+function fichaActual(){ return S.equipos.find(x=>x.id===S.fichaId); }
+
+function pintarFicha(){
+  const e = fichaActual(); if(!e) return;
+  const tags = {pendiente:['t-pend','Por revisar'],encontrado:['t-enc','Encontrado'],faltante:['t-falt','No localizado'],excedente:['t-exc','Excedente']}[e.estado];
+  $('#fichaTag').innerHTML = `<span class="tag ${tags[0]}">${tags[1]}</span>`;
+  $('#btnFaltante').style.display = e.origen==='padron' ? '' : 'none';
+  const pad = e.padron||{};
+  $('#fichaBody').innerHTML = `
+    ${e.origen==='padron' ? `<div class="banner b-info" style="margin-top:12px">
+        Equipo del listado · ${esc(pad.ubicacion||'')} ${pad.cliente?'· Cliente: '+esc(pad.cliente):''}
+        ${pad.estatusEntrega?'<br>Estatus en sistema: '+esc(pad.estatusEntrega):''}</div>`
+      : `<div class="banner b-warn" style="margin-top:12px">Equipo <b>no incluido en el listado</b>. Al guardarlo queda marcado como excedente encontrado en patio.</div>`}
+
+    <h2 class="sec">Identificación</h2>
+    <div class="card">
+      <label>NIV (17 caracteres)</label>
+      <input class="mono" id="fNiv" value="${esc(e.niv)}" maxlength="17" autocapitalize="characters" placeholder="3H3V532C0PT123456">
+      <div id="fNivAviso"></div>
+      <div class="grid2">
+        <div><label>Económico</label><input id="fEco" value="${esc(e.economico)}"></div>
+        <div><label>Placas</label><input id="fPlacas" value="${esc(e.placas)}" autocapitalize="characters"></div>
+      </div>
+      <label>Tipo de equipo</label>
+      <select id="fTipo"><option value="">— Seleccionar —</option>${opciones(CAT.tipos, e.tipo)}</select>
+      <div class="grid2">
+        <div><label>Marca</label><select id="fMarca"><option value="">—</option>${opciones(CAT.marcas, e.marca)}</select></div>
+        <div><label>Modelo</label><input id="fModelo" value="${esc(e.modelo)}"></div>
+      </div>
+      <div class="grid3">
+        <div><label>Año</label><input id="fAnio" inputmode="numeric" value="${esc(e.anio)}"></div>
+        <div><label>Ejes</label><input id="fEjes" inputmode="numeric" value="${esc(e.ejes)}"></div>
+        <div><label>Medida llanta</label><input id="fMedida" value="${esc(e.medidaLlantas)}" placeholder="11R22.5"></div>
+      </div>
+      <div class="grid2">
+        <div><label>Zona / posición en patio</label><input id="fZona" value="${esc(e.zona)}" placeholder="Zona 3, fila B"></div>
+        <div><label>Capturó</label><input id="fCap" value="${esc(e.capturadoPor)}"></div>
+      </div>
+      <label>Estatus físico</label>
+      <select id="fEstFis"><option value="">— Seleccionar —</option>${opciones(CAT.estatusFisico, e.estatusFisico)}</select>
+      <label>Observaciones</label>
+      <textarea id="fObs" placeholder="Daños, faltantes, detalles a reportar…">${esc(e.obs)}</textarea>
+      <div class="row" style="margin-top:10px">
+        <button class="btn sm" onclick="tomarGPS()">📍 Ubicación GPS</button>
+        <span class="hint" id="gpsTxt">${e.gps?`${e.gps.lat.toFixed(5)}, ${e.gps.lng.toFixed(5)}`:'sin coordenada'}</span>
+      </div>
+    </div>
+
+    <h2 class="sec">Adicionales instalados</h2>
+    <div class="card tight">
+      <div id="listaAdic">${pintarAdicionales(e)}</div>
+      <div class="row" style="margin-top:8px">
+        <select id="selAdic" style="flex:1"><option value="">+ Agregar adicional…</option>${opciones(CAT.adicionales,'')}</select>
+        <button class="btn primary sm" onclick="agregarAdicional()">Agregar</button>
+      </div>
+    </div>
+
+    <h2 class="sec">Fotografías</h2>
+    <div class="card">
+      <div class="angles">${CAT.angulos.map(a=>botonAngulo(e.id,a)).join('')}</div>
+      <div class="thumbs" id="thumbsEq">${pintarThumbs(e.id)}</div>
+    </div>
+
+    ${e.estado==='faltante'?`<div class="card"><label>Motivo por el que no se localizó</label>
+      <select id="fMotivo">${opciones(CAT.motivosFaltante, e.motivoFaltante)}</select></div>`:''}
+
+    ${e.origen==='manual'?`<button class="btn ghost wide" onclick="borrarEquipo()">Eliminar este registro</button>`:''}
+    <div style="height:24px"></div>`;
+  $('#fNiv').oninput = ev => {
+    const v = ev.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''); ev.target.value = v;
+    $('#fNivAviso').innerHTML = v && v.length!==17 ? `<div class="hint" style="color:var(--warn)">Lleva ${v.length} de 17 caracteres.</div>` : '';
+  };
+}
+function pintarAdicionales(e){
+  if(!e.adicionales.length) return `<div class="hint" style="padding:6px 2px">Sin adicionales registrados en este equipo.</div>`;
+  return e.adicionales.map((a,i)=>`
+    <div class="add-row">
+      <div class="top"><span class="nom">${esc(a.tipo)}</span><span class="sp"></span>
+        <div class="stepper">
+          <button onclick="qty(${i},-1)">−</button>
+          <input inputmode="numeric" value="${esc(a.cantidad)}" onchange="setQty(${i},this.value)">
+          <button onclick="qty(${i},1)">+</button>
+        </div>
+        <button class="btn sm ghost" onclick="quitarAdicional(${i})">✕</button>
+      </div>
+      <div class="grid2" style="margin-top:6px">
+        <div><label>Marca / medida</label><input value="${esc(a.marcaMedida)}" onchange="setAdic(${i},'marcaMedida',this.value)"></div>
+        <div><label>Condición</label><select onchange="setAdic(${i},'condicion',this.value)">${opciones(CAT.condiciones,a.condicion)}</select></div>
+      </div>
+      <label>Serie / observación</label>
+      <input value="${esc(a.obs)}" onchange="setAdic(${i},'obs',this.value)" placeholder="Serie, número, detalle">
+    </div>`).join('');
+}
+function agregarAdicional(){
+  const v = $('#selAdic').value; if(!v) return;
+  const e = fichaActual();
+  e.adicionales.push({tipo:v, cantidad:1, marcaMedida:'', condicion:'Usado - Bueno', obs:''});
+  $('#selAdic').value=''; $('#listaAdic').innerHTML = pintarAdicionales(e); persistirFicha();
+}
+function quitarAdicional(i){ const e=fichaActual(); e.adicionales.splice(i,1); $('#listaAdic').innerHTML=pintarAdicionales(e); persistirFicha(); }
+function qty(i,d){ const e=fichaActual(); e.adicionales[i].cantidad=Math.max(0,(+e.adicionales[i].cantidad||0)+d); $('#listaAdic').innerHTML=pintarAdicionales(e); persistirFicha(); }
+function setQty(i,v){ const e=fichaActual(); e.adicionales[i].cantidad=Math.max(0,parseInt(v)||0); persistirFicha(); }
+function setAdic(i,k,v){ const e=fichaActual(); e.adicionales[i][k]=v; persistirFicha(); }
+
+function leerCampos(){
+  const e = fichaActual(); if(!e || !$('#fNiv')) return e;
+  e.niv=$('#fNiv').value.trim(); e.economico=$('#fEco').value.trim(); e.placas=$('#fPlacas').value.trim().toUpperCase();
+  e.tipo=$('#fTipo').value; e.marca=$('#fMarca').value; e.modelo=$('#fModelo').value.trim();
+  e.anio=$('#fAnio').value.trim(); e.ejes=$('#fEjes').value.trim(); e.medidaLlantas=$('#fMedida').value.trim();
+  e.zona=$('#fZona').value.trim(); e.capturadoPor=$('#fCap').value.trim();
+  e.estatusFisico=$('#fEstFis').value; e.obs=$('#fObs').value.trim();
+  if($('#fMotivo')) e.motivoFaltante=$('#fMotivo').value;
+  return e;
+}
+function persistirFicha(){ const e=fichaActual(); if(e) store.put('equipos', e); }
+
+async function guardarFicha(cerrar){
+  const e = leerCampos(); if(!e) return;
+  if(cerrar){
+    if(!e.niv && !e.economico){ toast('Captura al menos el NIV o el número económico'); return; }
+    if(e.estado!=='faltante'){ e.estado = (e.origen==='padron') ? 'encontrado' : 'excedente'; e.ts = stamp(); }
+  }
+  await store.put('equipos', e);
+  if(cerrar){ $('#sheetEquipo').classList.remove('open'); document.body.style.overflow=''; S.fichaId=null; render(); toast('Equipo confirmado en patio'); }
+}
+async function marcarFaltante(){
+  const e = leerCampos(); if(!e) return;
+  e.estado='faltante'; e.ts=stamp(); e.motivoFaltante = e.motivoFaltante || CAT.motivosFaltante[0];
+  await store.put('equipos', e);
+  $('#sheetEquipo').classList.remove('open'); document.body.style.overflow=''; S.fichaId=null; render();
+  toast('Marcado como no localizado');
+}
+async function borrarEquipo(){
+  const e = fichaActual(); if(!e) return;
+  if(!confirm('¿Eliminar este equipo y sus fotos?')) return;
+  for(const f of fotosDe(e.id)) await store.del('fotos', f.id);
+  S.fotos = S.fotos.filter(f=>f.refId!==e.id);
+  await store.del('equipos', e.id);
+  S.equipos = S.equipos.filter(x=>x.id!==e.id);
+  $('#sheetEquipo').classList.remove('open'); document.body.style.overflow=''; S.fichaId=null; render();
+}
+function tomarGPS(){
+  if(!navigator.geolocation){ toast('Sin GPS disponible'); return; }
+  toast('Obteniendo ubicación…');
+  navigator.geolocation.getCurrentPosition(p=>{
+    const e=fichaActual(); e.gps={lat:p.coords.latitude,lng:p.coords.longitude};
+    $('#gpsTxt').textContent = `${e.gps.lat.toFixed(5)}, ${e.gps.lng.toFixed(5)}`; persistirFicha();
+  }, ()=>toast('No se pudo obtener la ubicación'), {enableHighAccuracy:true, timeout:9000});
+}
+
+/* ============================== FOTOS =============================== */
+let fotoDestino = null; // {refId, refTipo, angulo}
+function botonAngulo(refId, ang){
+  const n = S.fotos.filter(f=>f.refId===refId && f.angulo===ang).length;
+  const ult = S.fotos.filter(f=>f.refId===refId && f.angulo===ang).slice(-1)[0];
+  return `<div class="angle ${n?'has':''}" onclick="pedirFoto('${refId}','${ang}')">
+    ${n?`<span class="badge">${n}</span>`:''}
+    ${ult && ult.thumb ? `<img src="${ult.thumb}" alt="">`
+      : `<svg viewBox="0 0 24 24"><path d="M3 8h4l1.5-2h7L17 8h4v11H3z"/><circle cx="12" cy="13" r="3.4"/></svg>`}
+    <span class="lbl">${esc(ang)}</span></div>`;
+}
+function pedirFoto(refId, ang){
+  const refTipo = S.equipos.some(e=>e.id===refId) ? 'equipo' : 'suelto';
+  fotoDestino = {refId, refTipo, angulo:ang};
+  $('#fileFoto').value=''; $('#fileFoto').click();
+}
+$('#fileFoto').onchange = async ev => {
+  const files = Array.from(ev.target.files||[]); if(!files.length || !fotoDestino) return;
+  toast('Procesando foto…');
+  for(const file of files){
+    try{
+      const {blob, thumb} = await comprimir(file);
+      const rec = {id:uid(), refId:fotoDestino.refId, refTipo:fotoDestino.refTipo, angulo:fotoDestino.angulo,
+                   nombre:'', thumb, blob, ts:stamp()};
+      await store.put('fotos', rec);
+      S.fotos.push({id:rec.id, refId:rec.refId, refTipo:rec.refTipo, angulo:rec.angulo, thumb, ts:rec.ts});
+    }catch(err){ toast('No se pudo procesar una imagen'); }
+  }
+  refrescarFotos();
+};
+function refrescarFotos(){
+  if(S.fichaId){
+    const e = fichaActual();
+    const cont = $('#fichaBody .angles'); if(cont) cont.innerHTML = CAT.angulos.map(a=>botonAngulo(e.id,a)).join('');
+    const th = $('#thumbsEq'); if(th) th.innerHTML = pintarThumbs(e.id);
+  }
+  if(S.sueltoId){
+    const cont = $('#sueltoBody .angles'); if(cont) cont.innerHTML = CAT.angulosSuelto.map(a=>botonAngulo(S.sueltoId,a)).join('');
+    const th = $('#thumbsSu'); if(th) th.innerHTML = pintarThumbs(S.sueltoId);
+  }
+}
+function pintarThumbs(refId){
+  const fs = fotosDe(refId);
+  if(!fs.length) return '';
+  return fs.map(f=>`<div class="thumb"><img src="${f.thumb}" alt="${esc(f.angulo)}">
+    <button onclick="borrarFoto('${f.id}')">✕</button></div>`).join('');
+}
+async function borrarFoto(id){
+  await store.del('fotos', id); S.fotos = S.fotos.filter(f=>f.id!==id); refrescarFotos();
+}
+function comprimir(file, max=1440, q=0.72){
+  return new Promise((res,rej)=>{
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => {
+      const r = Math.min(1, max/Math.max(img.width,img.height));
+      const w = Math.round(img.width*r), h = Math.round(img.height*r);
+      const cv = document.createElement('canvas'); cv.width=w; cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      const tv = document.createElement('canvas'); const tr = Math.min(1,220/Math.max(w,h));
+      tv.width=Math.round(w*tr); tv.height=Math.round(h*tr);
+      tv.getContext('2d').drawImage(cv,0,0,tv.width,tv.height);
+      const thumb = tv.toDataURL('image/jpeg',0.6);
+      cv.toBlob(b=>{ URL.revokeObjectURL(url); b?res({blob:b, thumb}):rej(); }, 'image/jpeg', q);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(); };
+    img.src = url;
+  });
+}
+
+/* ====================== FICHA DE ADICIONAL SUELTO ==================== */
+function abrirSuelto(id){
+  if(!S.sesion){ toast('Abre una sesión primero'); return; }
+  let s = id ? S.sueltos.find(x=>x.id===id) : null;
+  if(!s){ s = nuevoSuelto({ts:stamp()}); S.sueltos.push(s); }
+  S.sueltoId = s.id; pintarSuelto();
+  $('#sheetSuelto').classList.add('open'); document.body.style.overflow='hidden';
+}
+function sueltoActual(){ return S.sueltos.find(x=>x.id===S.sueltoId); }
+function pintarSuelto(){
+  const s = sueltoActual(); if(!s) return;
+  const angs = CAT.angulosSuelto;
+  $('#sueltoBody').innerHTML = `
+    <h2 class="sec">Adicional en stock</h2>
+    <div class="card">
+      <label>Tipo</label>
+      <select id="uTipo"><option value="">— Seleccionar —</option>${opciones(CAT.adicionales, s.tipo)}</select>
+      <label>Descripción</label>
+      <input id="uDesc" value="${esc(s.descripcion)}" placeholder="Eje de 5ta rueda, concha de 40 pies…">
+      <div class="grid2">
+        <div><label>Marca</label><input id="uMarca" value="${esc(s.marca)}"></div>
+        <div><label>Medida / especificación</label><input id="uMedida" value="${esc(s.medida)}" placeholder="11R22.5"></div>
+      </div>
+      <div class="grid2">
+        <div><label>Cantidad</label>
+          <div class="stepper"><button onclick="uQty(-1)">−</button><input id="uCant" inputmode="numeric" value="${esc(s.cantidad)}"><button onclick="uQty(1)">+</button></div>
+        </div>
+        <div><label>Unidad</label><select id="uUnidad">${opciones(CAT.unidades, s.unidad)}</select></div>
+      </div>
+      <div class="grid2">
+        <div><label>Condición</label><select id="uCond">${opciones(CAT.condiciones, s.condicion)}</select></div>
+        <div><label>Zona en patio</label><input id="uZona" value="${esc(s.zona)}" placeholder="Bodega, zona 2"></div>
+      </div>
+      <label>Origen / propietario</label>
+      <input id="uProp" value="${esc(s.propietario)}" placeholder="HT, JJ, 3C, cliente, sin identificar">
+      <label>Observaciones</label>
+      <textarea id="uObs">${esc(s.obs)}</textarea>
+    </div>
+    <h2 class="sec">Fotografías</h2>
+    <div class="card">
+      <div class="angles">${angs.map(a=>botonAngulo(s.id,a)).join('')}</div>
+      <div class="thumbs" id="thumbsSu">${pintarThumbs(s.id)}</div>
+    </div>
+    <div style="height:24px"></div>`;
+}
+function uQty(d){ const el=$('#uCant'); el.value = Math.max(0,(parseInt(el.value)||0)+d); }
+function leerSuelto(){
+  const s = sueltoActual(); if(!s || !$('#uTipo')) return s;
+  s.tipo=$('#uTipo').value; s.descripcion=$('#uDesc').value.trim(); s.marca=$('#uMarca').value.trim();
+  s.medida=$('#uMedida').value.trim(); s.cantidad=parseInt($('#uCant').value)||0; s.unidad=$('#uUnidad').value;
+  s.condicion=$('#uCond').value; s.zona=$('#uZona').value.trim(); s.propietario=$('#uProp').value.trim();
+  s.obs=$('#uObs').value.trim(); s.ts = s.ts || stamp();
+  return s;
+}
+async function guardarSuelto(){
+  const s = leerSuelto(); if(!s) return;
+  if(!s.tipo){ toast('Selecciona el tipo de adicional'); return; }
+  await store.put('sueltos', s);
+  cerrarSuelto(); toast('Adicional guardado');
+}
+function cerrarSuelto(){
+  const s = leerSuelto();
+  if(s){ if(!s.tipo && !contarFotos(s.id)){ S.sueltos = S.sueltos.filter(x=>x.id!==s.id); } else store.put('sueltos', s); }
+  $('#sheetSuelto').classList.remove('open'); document.body.style.overflow=''; S.sueltoId=null; render();
+}
+async function borrarSuelto(){
+  const s = sueltoActual(); if(!s) return;
+  if(!confirm('¿Eliminar este adicional suelto?')) return;
+  for(const f of fotosDe(s.id)) await store.del('fotos', f.id);
+  S.fotos = S.fotos.filter(f=>f.refId!==s.id);
+  await store.del('sueltos', s.id); S.sueltos = S.sueltos.filter(x=>x.id!==s.id);
+  $('#sheetSuelto').classList.remove('open'); document.body.style.overflow=''; S.sueltoId=null; render();
+}
+
+/* ==================== CARGA DEL PADRÓN DESDE EXCEL =================== */
+const CDN = {
+  xlsx:'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+  jszip:'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'
+};
+function cargarLib(url, global){
+  if(window[global]) return Promise.resolve(true);
+  return new Promise(res=>{
+    const s=document.createElement('script'); s.src=url;
+    s.onload=()=>res(true); s.onerror=()=>res(false); document.head.appendChild(s);
+  });
+}
+const ALIAS = {
+  niv:['NIV','VIN','SERIE','NUMERO DE SERIE','NO DE SERIE','N SERIE'],
+  economico:['ECONOMICO','NO ECONOMICO','NUMERO ECONOMICO','N ECONOMICO','UNIDAD','NO ECONOMICO CLIENTE'],
+  tipo:['PRODUCTO','TIPO','TIPO DE EQUIPO','DESCRIPCION','EQUIPO'],
+  marca:['MARCA'], modelo:['MODELO'], anio:['ANO','ANIO','AÑO','MODELO ANO'],
+  placas:['PLACAS','PLACA'], ejes:['EJES','N EJES','NO EJES','NUM EJES','NUMERO DE EJES'],
+  medidaLlantas:['LLANTAS','MEDIDA LLANTA','MEDIDA DE LLANTA'],
+  ejeRetractil:['EJE RETRACTIL'], ubicacion:['UBICACION','PATIO','LOCALIDAD','PLAZA'],
+  cliente:['CLIENTE','ARRENDATARIO'],
+  estatusAsignacion:['ESTATUS DE ASIGNACION','ESTATUS ASIGNACION'],
+  estatusEntrega:['ESTATUS DE ENTREGA','ESTATUS ENTREGA']
+};
+let PADRON_TMP = null;
+
+$('#fileExcel').onchange = async ev => {
+  const file = ev.target.files[0]; if(!file) return;
+  const ok = await cargarLib(CDN.xlsx,'XLSX');
+  if(!ok){ toast('Sin conexión para leer Excel. Conéctate una vez y vuelve a intentar.'); return; }
+  toast('Leyendo archivo…');
+  try{
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf,{type:'array'});
+    let hoja = wb.SheetNames.find(n=>norm(n)==='INV') || null;
+    let datos = null;
+    for(const nombre of (hoja?[hoja]:wb.SheetNames)){
+      const aoa = XLSX.utils.sheet_to_json(wb.Sheets[nombre],{header:1,raw:false,defval:''});
+      const r = detectarEncabezado(aoa);
+      if(r>=0){ datos = mapear(aoa, r); break; }
+    }
+    if(!datos || !datos.length){ toast('No encontré una columna NIV en el archivo'); return; }
+    PADRON_TMP = datos;
+    mostrarSelectorUbicacion();
+  }catch(err){ console.error(err); toast('No se pudo leer el archivo'); }
+  ev.target.value='';
+};
+function detectarEncabezado(aoa){
+  for(let i=0;i<Math.min(20,aoa.length);i++){
+    const fila = (aoa[i]||[]).map(norm);
+    if(fila.some(c=>ALIAS.niv.includes(c))) return i;
+  }
+  return -1;
+}
+function mapear(aoa, r){
+  const heads = (aoa[r]||[]).map(norm);
+  const idx = {};
+  for(const [campo, alias] of Object.entries(ALIAS)){
+    idx[campo] = heads.findIndex(h=>alias.includes(h));
+    if(idx[campo]<0) idx[campo] = heads.findIndex(h=>h && alias.some(a=>h.includes(a)));
+  }
+  const out = [];
+  for(let i=r+1;i<aoa.length;i++){
+    const f = aoa[i]||[]; const val = k => idx[k]>=0 ? String(f[idx[k]]??'').trim() : '';
+    const niv = val('niv'); if(!niv || niv.length<6) continue;
+    out.push({niv:niv.toUpperCase(), economico:val('economico'), tipo:val('tipo'), marca:val('marca'),
+      modelo:val('modelo'), anio:val('anio'), placas:val('placas'), ejes:val('ejes'),
+      medidaLlantas:val('medidaLlantas'), ejeRetractil:val('ejeRetractil'), ubicacion:val('ubicacion'),
+      cliente:val('cliente'), estatusAsignacion:val('estatusAsignacion'), estatusEntrega:val('estatusEntrega')});
+  }
+  return out;
+}
+function mostrarSelectorUbicacion(){
+  const grupos = {};
+  PADRON_TMP.forEach(r=>{ const u = r.ubicacion || '(sin ubicación)'; grupos[u]=(grupos[u]||0)+1; });
+  const lista = Object.entries(grupos).sort((a,b)=>b[1]-a[1]);
+  $('#padronInfo').innerHTML = `
+    <div class="banner b-info"><b>${PADRON_TMP.length}</b> equipos leídos. Elige la ubicación que vas a levantar:</div>
+    <div class="chips">${lista.map(([u,n])=>`<button class="chip" onclick="importarUbicacion(${JSON.stringify(u).replace(/"/g,'&quot;')})">${esc(u)}<span class="n">${n}</span></button>`).join('')}
+      <button class="chip" onclick="importarUbicacion(null)">Cargar todas<span class="n">${PADRON_TMP.length}</span></button></div>`;
+}
+async function importarUbicacion(u){
+  if(!PADRON_TMP) return;
+  const filas = u===null ? PADRON_TMP : PADRON_TMP.filter(r=>(r.ubicacion||'(sin ubicación)')===u);
+  const existentes = new Set(S.equipos.map(e=>norm(e.niv)).filter(Boolean));
+  let nuevos = 0;
+  for(const r of filas){
+    if(existentes.has(norm(r.niv))) continue;
+    const e = nuevoEquipo({
+      origen:'padron', estado:'pendiente', niv:r.niv, economico:r.economico, tipo:r.tipo, marca:r.marca,
+      modelo:r.modelo, anio:r.anio, placas:r.placas, ejes:r.ejes, medidaLlantas:r.medidaLlantas,
+      capturadoPor:(S.sesion&&S.sesion.responsables)||'', padron:r
+    });
+    if(r.ejeRetractil && /S|SI|X|1/.test(norm(r.ejeRetractil)))
+      e.adicionales.push({tipo:'Eje retráctil', cantidad:1, marcaMedida:'', condicion:'Usado - Bueno', obs:'Según listado'});
+    S.equipos.push(e); await store.put('equipos', e); nuevos++; existentes.add(norm(r.niv));
+  }
+  PADRON_TMP = null;
+  S.equipos.sort((a,b)=>(a.economico||a.niv||'').localeCompare(b.economico||b.niv||''));
+  render(); toast(`${nuevos} equipos cargados a la lista`);
+}
+async function limpiarPadron(){
+  if(!confirm('Se quitan los equipos del listado que sigan sin revisar. ¿Continuar?')) return;
+  const quitar = S.equipos.filter(e=>e.origen==='padron' && e.estado==='pendiente');
+  for(const e of quitar) await store.del('equipos', e.id);
+  S.equipos = S.equipos.filter(e=>!(e.origen==='padron' && e.estado==='pendiente'));
+  render(); toast('Listado sin revisar eliminado');
+}
+
+/* ========================== VISTA: REPORTE ========================== */
+function vistaReporte(){
+  const c = conteos();
+  const totalAdic = S.equipos.reduce((s,e)=>s+e.adicionales.reduce((t,a)=>t+(+a.cantidad||0),0),0);
+  const totalSueltos = S.sueltos.reduce((s,x)=>s+(+x.cantidad||0),0);
+  const porTipo = {}; S.equipos.filter(e=>e.estado==='encontrado'||e.estado==='excedente')
+    .forEach(e=>{ const k=e.tipo||'(sin tipo)'; porTipo[k]=(porTipo[k]||0)+1; });
+  $('#view-reporte').innerHTML = `
+    <h2 class="sec">Resultado del levantamiento</h2>
+    <div class="kpi">
+      <div><b>${c.encontrado}</b><span>Encontrados</span></div>
+      <div><b>${c.faltante}</b><span>Faltantes</span></div>
+      <div><b>${c.excedente}</b><span>Excedentes</span></div>
+      <div><b>${c.pendiente}</b><span>Por revisar</span></div>
+    </div>
+    <div class="card">
+      <table class="mini">
+        <tr><td>Equipos en el listado</td><td>${S.equipos.filter(e=>e.origen==='padron').length}</td></tr>
+        <tr><td>Adicionales instalados (piezas)</td><td>${totalAdic}</td></tr>
+        <tr><td>Adicionales sueltos (piezas)</td><td>${totalSueltos}</td></tr>
+        <tr><td>Fotografías tomadas</td><td>${S.fotos.length}</td></tr>
+      </table>
+      ${Object.keys(porTipo).length?`<h2 class="sec">Físico por tipo de equipo</h2>
+      <table class="mini">${Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('')}</table>`:''}
+    </div>
+    ${c.pendiente?`<div class="banner b-warn">Quedan <b>${c.pendiente}</b> equipos sin revisar. En el reporte salen como pendientes.</div>`:''}
+    <h2 class="sec">Descargas</h2>
+    <div class="card">
+      <button class="btn primary wide" onclick="generarExcel()">Reporte en Excel</button>
+      <div style="height:8px"></div>
+      <button class="btn dark wide" onclick="descargarFotos()">Fotos en ZIP (carpeta por NIV)</button>
+      <p class="hint">Las fotos se agrupan en carpetas <span class="mono">NIV — Tipo — Patio</span>, igual que tu clasificación de imágenes.</p>
+    </div>
+    <div style="height:20px"></div>`;
+}
+
+/* ------------------------- GENERAR EXCEL --------------------------- */
+async function generarExcel(){
+  const ok = await cargarLib(CDN.xlsx,'XLSX');
+  if(!ok){ toast('Necesitas conexión una vez para habilitar la exportación a Excel'); return; }
+  const ses = S.sesion || {patio:'',fecha:hoy(),responsables:'',notas:''};
+  const wb = XLSX.utils.book_new();
+  const c = conteos();
+  const adicInst = []; const resumenAdic = {};
+  S.equipos.forEach(e=>e.adicionales.forEach(a=>{
+    if(e.estado==='faltante') return;
+    adicInst.push([e.niv, e.economico, e.tipo, a.tipo, +a.cantidad||0, a.marcaMedida, a.condicion, a.obs, e.zona]);
+    resumenAdic[a.tipo] = resumenAdic[a.tipo] || {inst:0, suelto:0};
+    resumenAdic[a.tipo].inst += (+a.cantidad||0);
+  }));
+  S.sueltos.forEach(s=>{ resumenAdic[s.tipo]=resumenAdic[s.tipo]||{inst:0,suelto:0}; resumenAdic[s.tipo].suelto += (+s.cantidad||0); });
+
+  /* --- Portada --- */
+  const porTipo = {}, porEstFis = {};
+  S.equipos.filter(e=>e.estado==='encontrado'||e.estado==='excedente').forEach(e=>{
+    porTipo[e.tipo||'(sin tipo)'] = (porTipo[e.tipo||'(sin tipo)']||0)+1;
+    porEstFis[e.estatusFisico||'(sin evaluar)'] = (porEstFis[e.estatusFisico||'(sin evaluar)']||0)+1;
+  });
+  const p = [
+    ['LEVANTAMIENTO FÍSICO DE INVENTARIO'],[],
+    ['Patio', ses.patio],['Fecha', ses.fecha],['Responsables', ses.responsables],
+    ['Generado', stamp()],['Notas', ses.notas],[],
+    ['CONCILIACIÓN CONTRA LISTADO'],
+    ['Equipos en el listado', S.equipos.filter(e=>e.origen==='padron').length],
+    ['Encontrados en patio', c.encontrado],
+    ['No localizados (faltantes)', c.faltante],
+    ['Excedentes no listados', c.excedente],
+    ['Sin revisar', c.pendiente],
+    ['Total físico en patio', c.encontrado + c.excedente],[],
+    ['FÍSICO POR TIPO DE EQUIPO'], ...Object.entries(porTipo).sort((a,b)=>b[1]-a[1]),[],
+    ['ESTATUS FÍSICO'], ...Object.entries(porEstFis).sort((a,b)=>b[1]-a[1]),[],
+    ['ADICIONALES (PIEZAS)'],['Tipo','Instalados','En stock suelto'],
+    ...Object.entries(resumenAdic).sort((a,b)=>(b[1].inst+b[1].suelto)-(a[1].inst+a[1].suelto)).map(([k,v])=>[k,v.inst,v.suelto]),[],
+    ['Fotografías tomadas', S.fotos.length]
+  ];
+  const wsP = XLSX.utils.aoa_to_sheet(p); wsP['!cols']=[{wch:38},{wch:22},{wch:18}];
+  XLSX.utils.book_append_sheet(wb, wsP, 'Portada');
+
+  /* --- Equipos --- */
+  const estLbl = {pendiente:'SIN REVISAR',encontrado:'ENCONTRADO',faltante:'FALTANTE',excedente:'EXCEDENTE'};
+  const hEq = ['Estado','Origen','NIV','Económico','Tipo','Marca','Modelo','Año','Placas','Ejes','Medida llanta',
+    'Zona en patio','Estatus físico','Adicionales (detalle)','Piezas adic.','Fotos','Motivo faltante','Observaciones',
+    'Capturó','Fecha captura','GPS','Ubicación en sistema','Cliente','Estatus asignación','Estatus entrega'];
+  const rEq = S.equipos.map(e=>{
+    const pd = e.padron||{};
+    return [estLbl[e.estado], e.origen==='padron'?'Listado':'Manual', e.niv, e.economico, e.tipo, e.marca, e.modelo,
+      e.anio, e.placas, e.ejes, e.medidaLlantas, e.zona, e.estatusFisico,
+      e.adicionales.map(a=>`${a.tipo} (${a.cantidad})`).join('; '),
+      e.adicionales.reduce((s,a)=>s+(+a.cantidad||0),0), contarFotos(e.id), e.motivoFaltante, e.obs,
+      e.capturadoPor, e.ts, e.gps?`${e.gps.lat.toFixed(5)}, ${e.gps.lng.toFixed(5)}`:'',
+      pd.ubicacion||'', pd.cliente||'', pd.estatusAsignacion||'', pd.estatusEntrega||''];
+  });
+  const wsE = XLSX.utils.aoa_to_sheet([hEq,...rEq]);
+  wsE['!cols']=[{wch:13},{wch:9},{wch:20},{wch:12},{wch:20},{wch:12},{wch:12},{wch:7},{wch:11},{wch:6},{wch:13},
+    {wch:16},{wch:24},{wch:40},{wch:11},{wch:7},{wch:26},{wch:40},{wch:14},{wch:18},{wch:20},{wch:20},{wch:24},{wch:20},{wch:20}];
+  wsE['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rEq.length,c:hEq.length-1}})};
+  XLSX.utils.book_append_sheet(wb, wsE, 'Equipos');
+
+  /* --- Faltantes / Excedentes --- */
+  const falt = S.equipos.filter(e=>e.estado==='faltante').map(e=>[e.niv,e.economico,e.tipo,e.marca,e.anio,e.placas,
+    (e.padron&&e.padron.ubicacion)||'',(e.padron&&e.padron.cliente)||'',(e.padron&&e.padron.estatusEntrega)||'',e.motivoFaltante,e.obs]);
+  const wsF = XLSX.utils.aoa_to_sheet([['NIV','Económico','Tipo','Marca','Año','Placas','Ubicación en sistema','Cliente','Estatus entrega','Motivo','Observaciones'],...falt]);
+  wsF['!cols']=[{wch:20},{wch:12},{wch:20},{wch:12},{wch:7},{wch:11},{wch:20},{wch:24},{wch:20},{wch:28},{wch:40}];
+  XLSX.utils.book_append_sheet(wb, wsF, 'Faltantes');
+
+  const exc = S.equipos.filter(e=>e.estado==='excedente').map(e=>[e.niv,e.economico,e.tipo,e.marca,e.modelo,e.anio,
+    e.placas,e.ejes,e.zona,e.estatusFisico,e.adicionales.map(a=>`${a.tipo} (${a.cantidad})`).join('; '),contarFotos(e.id),e.obs]);
+  const wsX = XLSX.utils.aoa_to_sheet([['NIV','Económico','Tipo','Marca','Modelo','Año','Placas','Ejes','Zona','Estatus físico','Adicionales','Fotos','Observaciones'],...exc]);
+  wsX['!cols']=[{wch:20},{wch:12},{wch:20},{wch:12},{wch:12},{wch:7},{wch:11},{wch:6},{wch:16},{wch:24},{wch:40},{wch:7},{wch:40}];
+  XLSX.utils.book_append_sheet(wb, wsX, 'Excedentes');
+
+  /* --- Adicionales --- */
+  const wsA = XLSX.utils.aoa_to_sheet([['NIV','Económico','Tipo de equipo','Adicional','Cantidad','Marca / medida','Condición','Serie / observación','Zona'],...adicInst]);
+  wsA['!cols']=[{wch:20},{wch:12},{wch:20},{wch:22},{wch:10},{wch:18},{wch:16},{wch:32},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, wsA, 'Adicionales instalados');
+
+  const rSu = S.sueltos.map(s=>[s.tipo,s.descripcion,s.marca,s.medida,+s.cantidad||0,s.unidad,s.condicion,s.zona,s.propietario,contarFotos(s.id),s.obs,s.ts]);
+  const wsS = XLSX.utils.aoa_to_sheet([['Tipo','Descripción','Marca','Medida','Cantidad','Unidad','Condición','Zona en patio','Origen / propietario','Fotos','Observaciones','Registrado'],...rSu]);
+  wsS['!cols']=[{wch:22},{wch:28},{wch:14},{wch:14},{wch:10},{wch:9},{wch:16},{wch:18},{wch:20},{wch:7},{wch:36},{wch:18}];
+  XLSX.utils.book_append_sheet(wb, wsS, 'Adicionales sueltos');
+
+  /* --- Índice de fotos --- */
+  const rF = S.fotos.map(f=>{
+    const e = S.equipos.find(x=>x.id===f.refId), s = S.sueltos.find(x=>x.id===f.refId);
+    return [e?'Equipo':'Adicional suelto', e?e.niv:(s?s.tipo:''), e?e.economico:'', f.angulo, nombreArchivo(f), f.ts];
+  });
+  const wsFo = XLSX.utils.aoa_to_sheet([['Origen','NIV / adicional','Económico','Ángulo','Archivo','Fecha'],...rF]);
+  wsFo['!cols']=[{wch:16},{wch:22},{wch:12},{wch:18},{wch:44},{wch:18}];
+  XLSX.utils.book_append_sheet(wb, wsFo, 'Índice de fotos');
+
+  const nombre = `Levantamiento_${limpio(ses.patio)}_${ses.fecha}.xlsx`;
+  XLSX.writeFile(wb, nombre);
+  toast('Reporte generado');
+}
+const limpio = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9 _.-]/g,'').replace(/\s+/g,'_').slice(0,60);
+function nombreArchivo(f){
+  const e = S.equipos.find(x=>x.id===f.refId), s = S.sueltos.find(x=>x.id===f.refId);
+  const base = e ? (e.niv || e.economico || 'SIN_NIV') : (s ? limpio(s.tipo) : 'FOTO');
+  const n = S.fotos.filter(x=>x.refId===f.refId && x.angulo===f.angulo).findIndex(x=>x.id===f.id)+1;
+  return `${limpio(base)}_${limpio(f.angulo)}_${n}.jpg`;
+}
+
+/* ------------------------ DESCARGAR FOTOS ZIP ----------------------- */
+async function descargarFotos(){
+  if(!S.fotos.length){ toast('Todavía no hay fotos'); return; }
+  const ok = await cargarLib(CDN.jszip,'JSZip');
+  if(!ok){ toast('Necesitas conexión una vez para habilitar el ZIP'); return; }
+  toast('Armando el ZIP…');
+  const zip = new JSZip();
+  const todas = await store.all('fotos');
+  const patio = limpio(S.sesion?S.sesion.patio:'');
+  for(const f of todas){
+    const e = S.equipos.find(x=>x.id===f.refId), s = S.sueltos.find(x=>x.id===f.refId);
+    let carpeta;
+    if(e) carpeta = `${limpio(e.niv||e.economico||'SIN_NIV')} - ${limpio(e.tipo||'SIN TIPO')} - ${patio}`;
+    else  carpeta = `_ADICIONALES SUELTOS/${limpio((s&&s.tipo)||'OTROS')}`;
+    zip.folder(carpeta).file(nombreArchivo(f), f.blob);
+  }
+  const blob = await zip.generateAsync({type:'blob'});
+  bajar(blob, `Fotos_${patio}_${S.sesion?S.sesion.fecha:hoy()}.zip`);
+  toast('ZIP descargado');
+}
+function bajar(blob, nombre){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},1500);
+}
+
+/* ------------------------ RESPALDO / MERGE -------------------------- */
+function exportarJSON(){
+  const data = {version:1, exportado:stamp(), sesion:S.sesion, equipos:S.equipos, sueltos:S.sueltos,
+    fotos:S.fotos.map(f=>({id:f.id,refId:f.refId,refTipo:f.refTipo,angulo:f.angulo,ts:f.ts}))};
+  bajar(new Blob([JSON.stringify(data)],{type:'application/json'}),
+    `Respaldo_${limpio(S.sesion?S.sesion.patio:'sesion')}_${hoy()}.json`);
+}
+$('#fileJson').onchange = async ev => {
+  const file = ev.target.files[0]; if(!file) return;
+  try{
+    const d = JSON.parse(await file.text());
+    const idsEq = new Set(S.equipos.map(e=>e.id)), nivs = new Set(S.equipos.map(e=>norm(e.niv)).filter(Boolean));
+    let n=0;
+    for(const e of (d.equipos||[])){
+      if(idsEq.has(e.id)) continue;
+      if(e.niv && nivs.has(norm(e.niv))){
+        const local = S.equipos.find(x=>norm(x.niv)===norm(e.niv));
+        if(local.estado==='pendiente' && e.estado!=='pendiente'){
+          Object.assign(local, e, {id:local.id}); await store.put('equipos', local); n++;
+        }
+        continue;
+      }
+      S.equipos.push(e); await store.put('equipos', e); n++;
+    }
+    const idsSu = new Set(S.sueltos.map(s=>s.id));
+    for(const s of (d.sueltos||[])){ if(idsSu.has(s.id)) continue; S.sueltos.push(s); await store.put('sueltos', s); n++; }
+    render(); toast(`${n} registros combinados (las fotos viajan en el ZIP)`);
+  }catch(err){ toast('Archivo de respaldo no válido'); }
+  ev.target.value='';
+};
+async function borrarTodo(){
+  if(!confirm('Se borra la sesión, los equipos, los adicionales y TODAS las fotos de este dispositivo. ¿Seguro?')) return;
+  if(!confirm('Última confirmación: esto no se puede deshacer.')) return;
+  for(const s of STORES) await store.clear(s);
+  S.sesion=null; S.equipos=[]; S.sueltos=[]; S.fotos=[]; render(); toast('Todo borrado');
+}
+
+/* ============================== ARRANQUE ============================ */
+function render(){
+  pintarHeader();
+  ['equipos','sueltos','reporte','sesion'].forEach(t=>$('#view-'+t).classList.toggle('hidden', t!==S.tab));
+  if(S.tab==='equipos') vistaEquipos();
+  if(S.tab==='sueltos') vistaSueltos();
+  if(S.tab==='reporte') vistaReporte();
+  if(S.tab==='sesion')  vistaSesion();
+}
+$$('nav.tabs button').forEach(b=>b.onclick = ()=>{
+  S.tab = b.dataset.tab; $$('nav.tabs button').forEach(x=>x.classList.toggle('on', x===b)); render();
+});
+window.addEventListener('beforeunload', e=>{ if(S.fichaId) leerCampos() && persistirFicha(); });
+
+(async function init(){
+  const idb = await abrirDB();
+  await cargarTodo();
+  if(!S.sesion) S.tab='sesion';
+  render();
+  if(!idb) toast('Aviso: este entorno no guarda datos. Descarga la app para usarla en patio.', 6000);
+  if(navigator.storage && navigator.storage.persist) { try{ await navigator.storage.persist(); }catch(e){} }
+  if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+    try{ await navigator.serviceWorker.register('sw.js'); }catch(e){}
+  }
+})();
+
+</script>
+</body>
+</html>
