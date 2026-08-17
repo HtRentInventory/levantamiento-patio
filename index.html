@@ -250,8 +250,6 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
    ===================================================================== */
 
 /* ------------------------- CATÁLOGOS EDITABLES ---------------------- */
-const APP_VERSION = 'v3 · 17 ago 2026';
-
 const CAT = {
   patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
            "Aligar Manzanillo","JJ Manzanillo","Delfín Manzanillo","Lázaro Cárdenas",
@@ -261,7 +259,10 @@ const CAT = {
   estatusFisico: ["Operativo","Requiere reparación menor","Requiere reparación mayor","Siniestrado","Fuera de operación"],
   condiciones: ["Nuevo","Usado - Bueno","Usado - Regular","Usado - Malo","Chatarra"],
   unidades: ["Pieza","Juego","Par","Metro","Kg"],
-  adicionales: ["Llantas","Ejes","Eje retráctil","Conchas","Winches"],   // los demás se agregan al capturarlos
+  adicionales: ["Llantas","Rines","Ejes","Eje retráctil","Conchas","Winches","Patines (landing gear)",
+                "Suspensión de aire","Bolsas de aire","Portallanta","Llanta de refacción","Perno rey / King pin",
+                "Tanque de aire","Cadenas","Templetes / Barras","Lona","Ganchos","Defensa trasera","Guardafangos",
+                "Caja de herramienta","Sistema ABS","Mangueras / Chicotes","Puertas","Escalera","Otro"],
   angulos: ["Frontal","Lateral izquierdo","Lateral derecho","Trasera","NIV grabado","Placas",
             "Piso / plataforma","Ejes y suspensión","Llantas","Adicionales","Daños","Otra"],
   motivosFaltante: ["No se encontró en patio","Entregado a cliente","En tránsito / salió del patio",
@@ -527,13 +528,6 @@ function vistaSesion(){
       </div>
       <button class="btn ghost wide" onclick="borrarTodo()">Borrar todo y empezar de cero</button>
       <div id="infoAlmacen" class="hint" style="margin-top:10px"></div>
-    </div>
-
-    <h2 class="sec">Versión</h2>
-    <div class="card">
-      <table class="mini"><tr><td>Versión instalada</td><td>${APP_VERSION}</td></tr></table>
-      <p class="hint">Si publicaste una versión nueva y el celular sigue mostrando la anterior, toca aquí: borra la caché y vuelve a descargar la app. Tus datos capturados no se tocan.</p>
-      <button class="btn dark wide" onclick="forzarActualizacion()">Buscar actualización</button>
     </div>
     <div style="height:20px"></div>`;
   pintarPadronInfo(); infoAlmacenamiento(); pintarCatInfo();
@@ -1249,18 +1243,6 @@ async function borrarTodo(){
   if(!confirm('Última confirmación: esto no se puede deshacer.')) return;
   for(const s of STORES) await store.clear(s);
   S.sesion=null; S.equipos=[]; S.sueltos=[]; S.fotos=[]; render(); toast('Todo borrado');
-}
-
-async function forzarActualizacion(){
-  toast('Buscando versión nueva…');
-  try{
-    if('serviceWorker' in navigator){
-      const regs = await navigator.serviceWorker.getRegistrations();
-      for(const r of regs) await r.unregister();
-    }
-    if(window.caches){ const ks = await caches.keys(); for(const k of ks) await caches.delete(k); }
-  }catch(e){}
-  location.reload(true);
 }
 
 /* ============================== ARRANQUE ============================ */
