@@ -253,10 +253,9 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
 const CAT = {
   patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
            "Aligar Manzanillo","JJ Manzanillo","Delfín Manzanillo","Lázaro Cárdenas",
-           "JJ Veracruz","Fernández Veracruz","JJ Altamira","Otro"],
-  tipos: ["Portacontenedor 40/20","Portacontenedor 20","Plataforma Alta","Plataforma Baja","Dolly","Góndola",
-          "Volteo","Tanque","Lowboy","Caja Seca","Refrigerado","Jaula","Cuello Ganso","Otro"],
-  marcas: ["Forzaco","Atro","Wabash","Utility","Great Dane","Hyundai","Vanguard","Fruehauf","Lufkin","Otro"],
+           "JJ Veracruz","Fernández Veracruz","JJ Altamira"],
+  tipos: [],    // se llenan con la columna PRODUCTO de tu Excel
+  marcas: [],   // se llenan con la columna MARCA de tu Excel
   estatusFisico: ["Operativo","Requiere reparación menor","Requiere reparación mayor","Siniestrado","Fuera de operación"],
   condiciones: ["Nuevo","Usado - Bueno","Usado - Regular","Usado - Malo","Chatarra"],
   unidades: ["Pieza","Juego","Par","Metro","Kg"],
@@ -271,6 +270,28 @@ const CAT = {
   angulosSuelto: ["Vista general","Lateral","Etiqueta / medida","Estado de desgaste","Lote completo","Otra"]
 };
 
+/* Catálogos que se aprenden del archivo y de lo que capturas en patio */
+const CAT_APRENDIDOS = ['tipos','marcas','adicionales','patios'];
+function guardarCatalogos(){
+  const v = {}; CAT_APRENDIDOS.forEach(k=>v[k]=CAT[k]); return store.put('kv',{k:'catalogos', v});
+}
+function recordar(lista, valor){
+  const v = String(valor||'').trim(); if(!v) return;
+  if(!CAT[lista].some(x=>norm(x)===norm(v))){ CAT[lista].push(v); CAT[lista].sort((a,b)=>a.localeCompare(b,'es')); guardarCatalogos(); }
+}
+function aprenderDelArchivo(filas){
+  const frec = campo => {
+    const m = new Map();
+    filas.forEach(r=>{ const v=(r[campo]||'').trim(); if(!v) return;
+      const k=norm(v); if(!m.has(k)) m.set(k,{txt:v,n:0}); m.get(k).n++; });
+    return Array.from(m.values()).sort((a,b)=>b.n-a.n).map(x=>x.txt);
+  };
+  CAT.tipos  = frec('tipo');
+  CAT.marcas = frec('marca');
+  frec('ubicacion').forEach(u=>{ if(!CAT.patios.some(p=>norm(p)===norm(u))) CAT.patios.push(u); });
+  guardarCatalogos();
+}
+
 /* ------------------------------ UTILS ------------------------------- */
 const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
@@ -283,7 +304,15 @@ function toast(msg, ms=2400){
   const t = document.createElement('div'); t.className='toast'; t.textContent = msg;
   document.body.appendChild(t); setTimeout(()=>t.remove(), ms);
 }
-function opciones(arr, sel){ return arr.map(v=>`<option value="${esc(v)}"${norm(v)===norm(sel)?' selected':''}>${esc(v)}</option>`).join(''); }
+function opciones(arr, sel){
+  const lista = (sel && !arr.some(v=>norm(v)===norm(sel))) ? [sel, ...arr] : arr;   // nunca perder un valor que ya venía capturado
+  return lista.map(v=>`<option value="${esc(v)}"${norm(v)===norm(sel)?' selected':''}>${esc(v)}</option>`).join('');
+}
+/* Campo libre con sugerencias: respeta la nomenclatura del inventario y admite capturar una nueva */
+function sugerido(id, lista, valor, ph){
+  return `<input id="${id}" list="dl_${id}" value="${esc(valor)}" placeholder="${esc(ph||'')}" autocomplete="off">
+    <datalist id="dl_${id}">${lista.map(v=>`<option value="${esc(v)}">`).join('')}</datalist>`;
+}
 
 /* ------------------------- ALMACENAMIENTO --------------------------- */
 const STORES = ['kv','equipos','sueltos','fotos'];
@@ -360,6 +389,8 @@ const nuevoSuelto = o => Object.assign({
 async function cargarTodo(){
   const kv = await store.get('kv','sesion');
   S.sesion = (kv && kv.v) || null;
+  const kc = await store.get('kv','catalogos');
+  if(kc && kc.v) CAT_APRENDIDOS.forEach(k=>{ if(Array.isArray(kc.v[k])) CAT[k]=kc.v[k]; });
   S.equipos = await store.all('equipos');
   S.sueltos = await store.all('sueltos');
   S.fotos   = (await store.all('fotos')).map(f=>({id:f.id, refId:f.refId, refTipo:f.refTipo, angulo:f.angulo, nombre:f.nombre, thumb:f.thumb, ts:f.ts}));
@@ -455,7 +486,7 @@ function vistaSesion(){
     <h2 class="sec">Sesión de levantamiento</h2>
     <div class="card">
       <label>Patio</label>
-      <select id="sPatio">${opciones(CAT.patios, s?s.patio:'')}</select>
+      ${sugerido('sPatio', CAT.patios, s?s.patio:'', 'Como se llama en tu inventario')}
       <div class="grid2">
         <div><label>Fecha</label><input type="date" id="sFecha" value="${esc(s?s.fecha:hoy())}"></div>
         <div><label>Responsables</label><input id="sResp" value="${esc(s?s.responsables:'')}" placeholder="Rogelio / Aldair"></div>
@@ -476,6 +507,18 @@ function vistaSesion(){
       <div id="padronInfo" style="margin-top:10px"></div>
     </div>
 
+    <h2 class="sec">Nomenclatura</h2>
+    <div class="card">
+      <p class="hint" style="margin-top:0">Tipos, marcas y ubicaciones se toman tal cual de tu Excel al cargarlo, ordenados por los más usados. Los campos son de texto libre con sugerencias: si capturas algo nuevo en patio, queda agregado al catálogo.</p>
+      <div id="catInfo"></div>
+      <div class="btnrow" style="margin-top:10px">
+        <button class="btn ghost sm" onclick="verCatalogo('tipos')">Ver tipos</button>
+        <button class="btn ghost sm" onclick="verCatalogo('marcas')">Ver marcas</button>
+        <button class="btn ghost sm" onclick="verCatalogo('adicionales')">Ver adicionales</button>
+      </div>
+      <div id="catLista"></div>
+    </div>
+
     <h2 class="sec">Respaldo y equipos de trabajo</h2>
     <div class="card">
       <p class="hint" style="margin-top:0">Si levantan en dos celulares, cada quien exporta su respaldo y luego se importa en un solo dispositivo: los registros se combinan sin duplicar.</p>
@@ -487,7 +530,7 @@ function vistaSesion(){
       <div id="infoAlmacen" class="hint" style="margin-top:10px"></div>
     </div>
     <div style="height:20px"></div>`;
-  pintarPadronInfo(); infoAlmacenamiento();
+  pintarPadronInfo(); infoAlmacenamiento(); pintarCatInfo();
 }
 function pintarPadronInfo(){
   const el = $('#padronInfo'); if(!el) return;
@@ -496,6 +539,27 @@ function pintarPadronInfo(){
   el.innerHTML = p||m
     ? `<table class="mini"><tr><td>Equipos cargados del listado</td><td>${p}</td></tr><tr><td>Agregados manualmente</td><td>${m}</td></tr></table>`
     : `<div class="hint">Todavía no hay listado cargado.</div>`;
+}
+function pintarCatInfo(){
+  const el = $('#catInfo'); if(!el) return;
+  el.innerHTML = `<table class="mini">
+    <tr><td>Tipos de equipo</td><td>${CAT.tipos.length||'—'}</td></tr>
+    <tr><td>Marcas</td><td>${CAT.marcas.length||'—'}</td></tr>
+    <tr><td>Ubicaciones</td><td>${CAT.patios.length}</td></tr>
+    <tr><td>Adicionales</td><td>${CAT.adicionales.length}</td></tr></table>
+    ${CAT.tipos.length?'':'<div class="hint" style="color:var(--warn);margin-top:6px">Aún no cargas el Excel: los tipos y marcas están vacíos y tendrás que escribirlos a mano.</div>'}`;
+}
+let catAbierto = null;
+function verCatalogo(k){
+  catAbierto = catAbierto===k ? null : k;
+  const el = $('#catLista');
+  if(!catAbierto || !CAT[k].length){ el.innerHTML = catAbierto?'<div class="hint">Vacío.</div>':''; return; }
+  el.innerHTML = `<div class="chips" style="margin-top:10px">${CAT[k].map((v,i)=>
+    `<span class="chip" style="cursor:default">${esc(v)}<button onclick="quitarDelCatalogo('${k}',${i})" style="border:0;background:none;color:var(--bad);font-weight:800;margin-left:4px;cursor:pointer">✕</button></span>`).join('')}</div>
+    <p class="hint">Quita lo que no uses; lo que captures en patio se agrega solo.</p>`;
+}
+async function quitarDelCatalogo(k,i){
+  CAT[k].splice(i,1); await guardarCatalogos(); catAbierto=null; verCatalogo(k); pintarCatInfo();
 }
 async function infoAlmacenamiento(){
   const el = $('#infoAlmacen'); if(!el) return;
@@ -508,7 +572,8 @@ async function infoAlmacenamiento(){
   el.textContent = txt;
 }
 async function guardarDatosSesion(){
-  S.sesion = { patio:$('#sPatio').value, fecha:$('#sFecha').value||hoy(),
+  recordar('patios', $('#sPatio').value.trim());
+  S.sesion = { patio:$('#sPatio').value.trim(), fecha:$('#sFecha').value||hoy(),
                responsables:$('#sResp').value.trim(), notas:$('#sNotas').value.trim() };
   await guardarSesion(); pintarHeader(); toast('Sesión guardada');
 }
@@ -557,9 +622,9 @@ function pintarFicha(){
         <div><label>Placas</label><input id="fPlacas" value="${esc(e.placas)}" autocapitalize="characters"></div>
       </div>
       <label>Tipo de equipo</label>
-      <select id="fTipo"><option value="">— Seleccionar —</option>${opciones(CAT.tipos, e.tipo)}</select>
+      ${sugerido('fTipo', CAT.tipos, e.tipo, CAT.tipos.length?'Como viene en el inventario':'Carga tu Excel para ver el catálogo')}
       <div class="grid2">
-        <div><label>Marca</label><select id="fMarca"><option value="">—</option>${opciones(CAT.marcas, e.marca)}</select></div>
+        <div><label>Marca</label>${sugerido('fMarca', CAT.marcas, e.marca, '')}</div>
         <div><label>Modelo</label><input id="fModelo" value="${esc(e.modelo)}"></div>
       </div>
       <div class="grid3">
@@ -585,7 +650,7 @@ function pintarFicha(){
     <div class="card tight">
       <div id="listaAdic">${pintarAdicionales(e)}</div>
       <div class="row" style="margin-top:8px">
-        <select id="selAdic" style="flex:1"><option value="">+ Agregar adicional…</option>${opciones(CAT.adicionales,'')}</select>
+        <div style="flex:1">${sugerido('selAdic', CAT.adicionales, '', 'Llantas, ejes, conchas, winches…')}</div>
         <button class="btn primary sm" onclick="agregarAdicional()">Agregar</button>
       </div>
     </div>
@@ -627,7 +692,8 @@ function pintarAdicionales(e){
     </div>`).join('');
 }
 function agregarAdicional(){
-  const v = $('#selAdic').value; if(!v) return;
+  const v = $('#selAdic').value.trim(); if(!v) return;
+  recordar('adicionales', v);
   const e = fichaActual();
   e.adicionales.push({tipo:v, cantidad:1, marcaMedida:'', condicion:'Usado - Bueno', obs:''});
   $('#selAdic').value=''; $('#listaAdic').innerHTML = pintarAdicionales(e); persistirFicha();
@@ -640,7 +706,8 @@ function setAdic(i,k,v){ const e=fichaActual(); e.adicionales[i][k]=v; persistir
 function leerCampos(){
   const e = fichaActual(); if(!e || !$('#fNiv')) return e;
   e.niv=$('#fNiv').value.trim(); e.economico=$('#fEco').value.trim(); e.placas=$('#fPlacas').value.trim().toUpperCase();
-  e.tipo=$('#fTipo').value; e.marca=$('#fMarca').value; e.modelo=$('#fModelo').value.trim();
+  e.tipo=$('#fTipo').value.trim(); e.marca=$('#fMarca').value.trim(); e.modelo=$('#fModelo').value.trim();
+  recordar('tipos', e.tipo); recordar('marcas', e.marca);
   e.anio=$('#fAnio').value.trim(); e.ejes=$('#fEjes').value.trim(); e.medidaLlantas=$('#fMedida').value.trim();
   e.zona=$('#fZona').value.trim(); e.capturadoPor=$('#fCap').value.trim();
   e.estatusFisico=$('#fEstFis').value; e.obs=$('#fObs').value.trim();
@@ -768,7 +835,7 @@ function pintarSuelto(){
     <h2 class="sec">Adicional en stock</h2>
     <div class="card">
       <label>Tipo</label>
-      <select id="uTipo"><option value="">— Seleccionar —</option>${opciones(CAT.adicionales, s.tipo)}</select>
+      ${sugerido('uTipo', CAT.adicionales, s.tipo, 'Llantas, ejes, eje retráctil, conchas, winches…')}
       <label>Descripción</label>
       <input id="uDesc" value="${esc(s.descripcion)}" placeholder="Eje de 5ta rueda, concha de 40 pies…">
       <div class="grid2">
@@ -800,7 +867,7 @@ function pintarSuelto(){
 function uQty(d){ const el=$('#uCant'); el.value = Math.max(0,(parseInt(el.value)||0)+d); }
 function leerSuelto(){
   const s = sueltoActual(); if(!s || !$('#uTipo')) return s;
-  s.tipo=$('#uTipo').value; s.descripcion=$('#uDesc').value.trim(); s.marca=$('#uMarca').value.trim();
+  s.tipo=$('#uTipo').value.trim(); recordar('adicionales', s.tipo); s.descripcion=$('#uDesc').value.trim(); s.marca=$('#uMarca').value.trim();
   s.medida=$('#uMedida').value.trim(); s.cantidad=parseInt($('#uCant').value)||0; s.unidad=$('#uUnidad').value;
   s.condicion=$('#uCond').value; s.zona=$('#uZona').value.trim(); s.propietario=$('#uProp').value.trim();
   s.obs=$('#uObs').value.trim(); s.ts = s.ts || stamp();
@@ -850,7 +917,7 @@ const ALIAS = {
   estatusAsignacion:['ESTATUS DE ASIGNACION','ESTATUS ASIGNACION'],
   estatusEntrega:['ESTATUS DE ENTREGA','ESTATUS ENTREGA']
 };
-let PADRON_TMP = null;
+let PADRON_TMP = null, PADRON_UBIC = null, ESTATUS_SEL = new Set();
 
 $('#fileExcel').onchange = async ev => {
   const file = ev.target.files[0]; if(!file) return;
@@ -869,6 +936,7 @@ $('#fileExcel').onchange = async ev => {
     }
     if(!datos || !datos.length){ toast('No encontré una columna NIV en el archivo'); return; }
     PADRON_TMP = datos;
+    aprenderDelArchivo(datos);
     mostrarSelectorUbicacion();
   }catch(err){ console.error(err); toast('No se pudo leer el archivo'); }
   ev.target.value='';
@@ -903,13 +971,46 @@ function mostrarSelectorUbicacion(){
   PADRON_TMP.forEach(r=>{ const u = r.ubicacion || '(sin ubicación)'; grupos[u]=(grupos[u]||0)+1; });
   const lista = Object.entries(grupos).sort((a,b)=>b[1]-a[1]);
   $('#padronInfo').innerHTML = `
-    <div class="banner b-info"><b>${PADRON_TMP.length}</b> equipos leídos. Elige la ubicación que vas a levantar:</div>
-    <div class="chips">${lista.map(([u,n])=>`<button class="chip" onclick="importarUbicacion(${JSON.stringify(u).replace(/"/g,'&quot;')})">${esc(u)}<span class="n">${n}</span></button>`).join('')}
-      <button class="chip" onclick="importarUbicacion(null)">Cargar todas<span class="n">${PADRON_TMP.length}</span></button></div>`;
+    <div class="banner b-info"><b>${PADRON_TMP.length}</b> equipos leídos. <b>Paso 1:</b> elige el patio que vas a visitar.</div>
+    <div class="chips">${lista.map(([u,n])=>`<button class="chip" onclick="elegirUbicacion(${JSON.stringify(u).replace(/"/g,'&quot;')})">${esc(u)}<span class="n">${n}</span></button>`).join('')}
+      <button class="chip" onclick="elegirUbicacion(null)">Todas las ubicaciones<span class="n">${PADRON_TMP.length}</span></button></div>`;
 }
-async function importarUbicacion(u){
+const etiquetaEstatus = r => (r.estatusEntrega||'').trim() || '(sin estatus)';
+function elegirUbicacion(u){
+  PADRON_UBIC = u;
+  const filas = filasUbicacion();
+  const grupos = {};
+  filas.forEach(r=>{ const k = etiquetaEstatus(r); grupos[k]=(grupos[k]||0)+1; });
+  ESTATUS_SEL = new Set(Object.keys(grupos).filter(k=>norm(k).includes('PENDIENTE')));
+  if(!ESTATUS_SEL.size && Object.keys(grupos).length===1) ESTATUS_SEL = new Set(Object.keys(grupos));
+  pintarSelectorEstatus(grupos);
+}
+const filasUbicacion = () => PADRON_UBIC===null ? PADRON_TMP : PADRON_TMP.filter(r=>(r.ubicacion||'(sin ubicación)')===PADRON_UBIC);
+function pintarSelectorEstatus(grupos){
+  const lista = Object.entries(grupos).sort((a,b)=>b[1]-a[1]);
+  const total = lista.filter(([k])=>ESTATUS_SEL.has(k)).reduce((s,[,n])=>s+n,0);
+  $('#padronInfo').innerHTML = `
+    <div class="banner b-info"><b>Paso 2:</b> ${esc(PADRON_UBIC||'todas las ubicaciones')} · elige qué estatus de entrega vas a levantar.
+      Se cargan solo los equipos <b>pendientes de entrega</b>; agrega otro estatus si también lo vas a contar.</div>
+    <div class="chips">${lista.map(([k,n])=>`<button class="chip ${ESTATUS_SEL.has(k)?'on':''}" onclick="toggleEstatus(${JSON.stringify(k).replace(/"/g,'&quot;')})">${esc(k)}<span class="n">${n}</span></button>`).join('')}</div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn sm ghost" onclick="mostrarSelectorUbicacion()">← Cambiar patio</button>
+      <div class="sp"></div>
+      <button class="btn primary sm" onclick="importarSeleccion()" ${total?'':'disabled'}>Cargar ${total} equipos</button>
+    </div>`;
+}
+function toggleEstatus(k){
+  ESTATUS_SEL.has(k) ? ESTATUS_SEL.delete(k) : ESTATUS_SEL.add(k);
+  elegirUbicacionRepintar();
+}
+function elegirUbicacionRepintar(){
+  const grupos = {};
+  filasUbicacion().forEach(r=>{ const k = etiquetaEstatus(r); grupos[k]=(grupos[k]||0)+1; });
+  pintarSelectorEstatus(grupos);
+}
+async function importarSeleccion(){
   if(!PADRON_TMP) return;
-  const filas = u===null ? PADRON_TMP : PADRON_TMP.filter(r=>(r.ubicacion||'(sin ubicación)')===u);
+  const filas = filasUbicacion().filter(r=>ESTATUS_SEL.has(etiquetaEstatus(r)));
   const existentes = new Set(S.equipos.map(e=>norm(e.niv)).filter(Boolean));
   let nuevos = 0;
   for(const r of filas){
@@ -919,14 +1020,19 @@ async function importarUbicacion(u){
       modelo:r.modelo, anio:r.anio, placas:r.placas, ejes:r.ejes, medidaLlantas:r.medidaLlantas,
       capturadoPor:(S.sesion&&S.sesion.responsables)||'', padron:r
     });
-    if(r.ejeRetractil && /S|SI|X|1/.test(norm(r.ejeRetractil)))
+    if(r.ejeRetractil && /^(S|SI|X|1)$/.test(norm(r.ejeRetractil)))
       e.adicionales.push({tipo:'Eje retráctil', cantidad:1, marcaMedida:'', condicion:'Usado - Bueno', obs:'Según listado'});
     S.equipos.push(e); await store.put('equipos', e); nuevos++; existentes.add(norm(r.niv));
   }
-  PADRON_TMP = null;
+  if(S.sesion){
+    S.sesion.criterio = `${PADRON_UBIC||'Todas las ubicaciones'} · estatus de entrega: ${[...ESTATUS_SEL].join(', ')}`;
+    await guardarSesion();
+  }
+  PADRON_TMP = null; PADRON_UBIC = null; ESTATUS_SEL = new Set();
   S.equipos.sort((a,b)=>(a.economico||a.niv||'').localeCompare(b.economico||b.niv||''));
   render(); toast(`${nuevos} equipos cargados a la lista`);
 }
+
 async function limpiarPadron(){
   if(!confirm('Se quitan los equipos del listado que sigan sin revisar. ¿Continuar?')) return;
   const quitar = S.equipos.filter(e=>e.origen==='padron' && e.estado==='pendiente');
@@ -996,7 +1102,7 @@ async function generarExcel(){
   const p = [
     ['LEVANTAMIENTO FÍSICO DE INVENTARIO'],[],
     ['Patio', ses.patio],['Fecha', ses.fecha],['Responsables', ses.responsables],
-    ['Generado', stamp()],['Notas', ses.notas],[],
+    ['Generado', stamp()],['Criterio de carga del listado', ses.criterio||''],['Notas', ses.notas],[],
     ['CONCILIACIÓN CONTRA LISTADO'],
     ['Equipos en el listado', S.equipos.filter(e=>e.origen==='padron').length],
     ['Encontrados en patio', c.encontrado],
