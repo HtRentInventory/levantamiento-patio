@@ -1,5 +1,5 @@
 /* Service worker — offline en patio, pero sin quedarse pegado en versiones viejas */
-const VERSION = 'v3-2026-08-17';
+const VERSION = 'v4-2026-08-18';
 const CACHE = 'levantamiento-patio-' + VERSION;
 const LIBS = [
   'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
@@ -19,15 +19,16 @@ self.addEventListener('message', e => { if(e.data === 'skipWaiting') self.skipWa
 
 self.addEventListener('fetch', e => {
   if(e.request.method !== 'GET') return;
-  const esApp = e.request.mode === 'navigate' || e.request.url.includes('index.html');
+  const esApp = e.request.mode === 'navigate' || e.request.url.includes('index.html') || e.request.url.includes('padron.json');
   if(esApp){
     /* La app: primero red (para traer la última versión), caché si no hay señal */
     e.respondWith(
       fetch(e.request).then(res => {
         const copia = res.clone();
-        caches.open(CACHE).then(c => c.put('./index.html', copia)).catch(()=>{});
+        const clave = e.request.mode === 'navigate' ? './index.html' : e.request;
+        caches.open(CACHE).then(c => c.put(clave, copia)).catch(()=>{});
         return res;
-      }).catch(() => caches.match('./index.html').then(r => r || caches.match('./')))
+      }).catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))
     );
     return;
   }
