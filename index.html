@@ -250,7 +250,7 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
    ===================================================================== */
 
 /* ------------------------- CATÁLOGOS EDITABLES ---------------------- */
-const APP_VERSION = 'v6 · 18 ago 2026';
+const APP_VERSION = 'v7 · 18 ago 2026';
 
 const CAT = {
   patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
@@ -399,7 +399,8 @@ async function cargarTodo(){
   if(kc && kc.v) CAT_APRENDIDOS.forEach(k=>{ if(Array.isArray(kc.v[k])) CAT[k]=kc.v[k]; });
   S.equipos = await store.all('equipos');
   S.sueltos = await store.all('sueltos');
-  S.fotos   = (await store.all('fotos')).map(f=>({id:f.id, refId:f.refId, refTipo:f.refTipo, angulo:f.angulo, nombre:f.nombre, thumb:f.thumb, ts:f.ts}));
+  S.fotos   = (await store.all('fotos')).map(f=>({id:f.id, refId:f.refId, refTipo:f.refTipo, angulo:f.angulo,
+                nombre:f.nombre, thumb:f.thumb, disp:f.disp||'', externa:!!f.externa, ts:f.ts}));
   S.equipos.sort((a,b)=> (a.niv||'').localeCompare(b.niv||''));
 }
 const guardarSesion = () => store.put('kv',{k:'sesion', v:S.sesion});
@@ -784,7 +785,7 @@ function botonAngulo(refId, ang){
   const ult = S.fotos.filter(f=>f.refId===refId && f.angulo===ang).slice(-1)[0];
   return `<div class="angle ${n?'has':''}" onclick="pedirFoto('${refId}','${ang}')">
     ${n?`<span class="badge">${n}</span>`:''}
-    ${ult && ult.thumb ? `<img src="${ult.thumb}" alt="">`
+    ${ult && ult.thumb ? `<img src="${ult.thumb}" alt="">` : ult ? `<span class="lbl" style="font-size:16px">🖼️</span>`
       : `<svg viewBox="0 0 24 24"><path d="M3 8h4l1.5-2h7L17 8h4v11H3z"/><circle cx="12" cy="13" r="3.4"/></svg>`}
     <span class="lbl">${esc(ang)}</span></div>`;
 }
@@ -800,9 +801,9 @@ $('#fileFoto').onchange = async ev => {
     try{
       const {blob, thumb} = await comprimir(file);
       const rec = {id:uid(), refId:fotoDestino.refId, refTipo:fotoDestino.refTipo, angulo:fotoDestino.angulo,
-                   nombre:'', thumb, blob, ts:stamp()};
+                   nombre:'', thumb, blob, disp: usuarioActual(), ts:stamp()};
       await store.put('fotos', rec);
-      S.fotos.push({id:rec.id, refId:rec.refId, refTipo:rec.refTipo, angulo:rec.angulo, thumb, ts:rec.ts});
+      S.fotos.push({id:rec.id, refId:rec.refId, refTipo:rec.refTipo, angulo:rec.angulo, thumb, disp:rec.disp, ts:rec.ts});
     }catch(err){ toast('No se pudo procesar una imagen'); }
   }
   refrescarFotos();
@@ -821,8 +822,10 @@ function refrescarFotos(){
 function pintarThumbs(refId){
   const fs = fotosDe(refId);
   if(!fs.length) return '';
-  return fs.map(f=>`<div class="thumb"><img src="${f.thumb}" alt="${esc(f.angulo)}">
-    <button onclick="borrarFoto('${f.id}')">✕</button></div>`).join('');
+  return fs.map(f=> f.thumb
+    ? `<div class="thumb"><img src="${f.thumb}" alt="${esc(f.angulo)}"><button onclick="borrarFoto('${f.id}')">✕</button></div>`
+    : `<div class="thumb" style="border:1px dashed var(--line);border-radius:6px;display:flex;align-items:center;justify-content:center;aspect-ratio:1;font-size:11px;color:var(--muted);text-align:center;padding:4px">En el celular de ${esc(f.disp||'otro')}</div>`
+  ).join('');
 }
 async function borrarFoto(id){
   await store.del('fotos', id); S.fotos = S.fotos.filter(f=>f.id!==id); refrescarFotos();
@@ -1183,6 +1186,7 @@ function vistaReporte(){
       <div><b>${c.excedente}</b><span>Excedentes</span></div>
       <div><b>${c.pendiente}</b><span>Por revisar</span></div>
     </div>
+    ${porCapturista()}
     <div class="card">
       <table class="mini">
         <tr><td>Equipos en el listado</td><td>${S.equipos.filter(e=>e.origen==='padron').length}</td></tr>
@@ -1202,6 +1206,15 @@ function vistaReporte(){
       <p class="hint">Las fotos se agrupan en carpetas <span class="mono">NIV — Tipo — Patio</span>, igual que tu clasificación de imágenes.</p>
     </div>
     <div style="height:20px"></div>`;
+}
+
+function porCapturista(){
+  const g = {};
+  S.equipos.filter(e=>e.estado!=='pendiente' && e.capturadoPor).forEach(e=>{ g[e.capturadoPor]=(g[e.capturadoPor]||0)+1; });
+  const lista = Object.entries(g).sort((a,b)=>b[1]-a[1]);
+  if(lista.length<2) return '';
+  return `<div class="card"><div class="eyebrow" style="margin-bottom:6px">Revisado por capturista</div>
+    <table class="mini">${lista.map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('')}</table></div>`;
 }
 
 /* ------------------------- GENERAR EXCEL --------------------------- */
@@ -1231,7 +1244,7 @@ async function generarExcel(){
   const p = [
     ['LEVANTAMIENTO FÍSICO DE INVENTARIO'],[],
     ['Patio', ses.patio],['Fecha', ses.fecha],
-    ['Capturistas', [...new Set(S.equipos.filter(e=>e.capturadoPor).map(e=>e.capturadoPor))].join(', ') || USUARIO],
+    ['Capturistas', [...new Set(S.equipos.filter(e=>e.estado!=='pendiente'&&e.capturadoPor).map(e=>e.capturadoPor))].join(', ') || USUARIO],
     ['Generado', stamp()],['Criterio de carga del listado', ses.criterio||''],['Notas', ses.notas],[],
     ['CONCILIACIÓN CONTRA LISTADO'],
     ['Equipos en el listado', S.equipos.filter(e=>e.origen==='padron').length],
@@ -1297,10 +1310,10 @@ async function generarExcel(){
   /* --- Índice de fotos --- */
   const rF = S.fotos.map(f=>{
     const e = S.equipos.find(x=>x.id===f.refId), s = S.sueltos.find(x=>x.id===f.refId);
-    return [e?'Equipo':'Adicional suelto', e?e.niv:(s?s.tipo:''), f.angulo, nombreArchivo(f), f.ts];
+    return [e?'Equipo':'Adicional suelto', e?e.niv:(s?s.tipo:''), f.angulo, nombreArchivo(f), f.disp||'', f.ts];
   });
-  const wsFo = XLSX.utils.aoa_to_sheet([['Origen','NIV / adicional','Ángulo','Archivo','Fecha'],...rF]);
-  wsFo['!cols']=[{wch:16},{wch:22},{wch:18},{wch:44},{wch:18}];
+  const wsFo = XLSX.utils.aoa_to_sheet([['Origen','NIV / adicional','Ángulo','Archivo','Celular de','Fecha'],...rF]);
+  wsFo['!cols']=[{wch:16},{wch:22},{wch:18},{wch:44},{wch:16},{wch:18}];
   XLSX.utils.book_append_sheet(wb, wsFo, 'Índice de fotos');
 
   const nombre = `Levantamiento_${limpio(ses.patio)}_${ses.fecha}.xlsx`;
@@ -1322,7 +1335,8 @@ async function descargarFotos(){
   if(!ok){ toast('Necesitas conexión una vez para habilitar el ZIP'); return; }
   toast('Armando el ZIP…');
   const zip = new JSZip();
-  const todas = await store.all('fotos');
+  const todas = (await store.all('fotos')).filter(f=>f.blob);
+  const ajenas = S.fotos.length - todas.length;
   const patio = limpio(S.sesion?S.sesion.patio:'');
   for(const f of todas){
     const e = S.equipos.find(x=>x.id===f.refId), s = S.sueltos.find(x=>x.id===f.refId);
@@ -1332,8 +1346,8 @@ async function descargarFotos(){
     zip.folder(carpeta).file(nombreArchivo(f), f.blob);
   }
   const blob = await zip.generateAsync({type:'blob'});
-  bajar(blob, `Fotos_${patio}_${S.sesion?S.sesion.fecha:hoy()}.zip`);
-  toast('ZIP descargado');
+  bajar(blob, `Fotos_${patio}_${USUARIO?limpio(USUARIO)+'_':''}${S.sesion?S.sesion.fecha:hoy()}.zip`);
+  toast(ajenas ? `ZIP descargado. Faltan ${ajenas} fotos que están en otro celular: pide su ZIP y descomprime los dos en la misma carpeta.` : 'ZIP descargado', 5000);
 }
 function bajar(blob, nombre){
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre;
@@ -1343,7 +1357,7 @@ function bajar(blob, nombre){
 /* ------------------------ RESPALDO / MERGE -------------------------- */
 function exportarJSON(){
   const data = {version:1, exportado:stamp(), sesion:S.sesion, equipos:S.equipos, sueltos:S.sueltos,
-    fotos:S.fotos.map(f=>({id:f.id,refId:f.refId,refTipo:f.refTipo,angulo:f.angulo,ts:f.ts}))};
+    fotos:S.fotos.map(f=>({id:f.id,refId:f.refId,refTipo:f.refTipo,angulo:f.angulo,disp:f.disp||USUARIO,ts:f.ts}))};
   bajar(new Blob([JSON.stringify(data)],{type:'application/json'}),
     `Respaldo_${limpio(S.sesion?S.sesion.patio:'sesion')}_${hoy()}.json`);
 }
@@ -1366,7 +1380,14 @@ $('#fileJson').onchange = async ev => {
     }
     const idsSu = new Set(S.sueltos.map(s=>s.id));
     for(const s of (d.sueltos||[])){ if(idsSu.has(s.id)) continue; S.sueltos.push(s); await store.put('sueltos', s); n++; }
-    render(); toast(`${n} registros combinados (las fotos viajan en el ZIP)`);
+    const idsFo = new Set(S.fotos.map(f=>f.id));
+    let nf = 0;
+    for(const f of (d.fotos||[])){
+      if(idsFo.has(f.id)) continue;
+      const rec = {id:f.id, refId:f.refId, refTipo:f.refTipo, angulo:f.angulo, disp:f.disp||'', ts:f.ts, externa:true};
+      await store.put('fotos', rec); S.fotos.push(rec); nf++;
+    }
+    render(); toast(`${n} registros y ${nf} fotos referenciadas`, 4000);
   }catch(err){ toast('Archivo de respaldo no válido'); }
   ev.target.value='';
 };
