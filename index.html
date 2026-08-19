@@ -250,7 +250,7 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
    ===================================================================== */
 
 /* ------------------------- CATÁLOGOS EDITABLES ---------------------- */
-const APP_VERSION = 'v8 · 19 ago 2026 · nube';
+const APP_VERSION = 'v9 · 19 ago 2026 · nube';
 
 const CAT = {
   patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
@@ -1474,7 +1474,7 @@ const NUBE = {
   cdn: 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js',
   bucket: 'fotos-patio'
 };
-let SB = null, SESION_NUBE = null, LEV = null, LEVS = [];
+let SB = null, SESION_NUBE = null, LEV = null, LEV_NOMBRE = '', LEVS = [];
 const SYNC = {corriendo:false, pendiente:false, ultimo:'', error:'', subiendo:0};
 
 async function iniciarNube(){
@@ -1492,6 +1492,7 @@ async function iniciarNube(){
   SESION_NUBE = data && data.session ? data.session : null;
   SB.auth.onAuthStateChange((_ev, ses)=>{ SESION_NUBE = ses; if(ses) arrancarSesionNube(); render(); });
   const kl = await store.get('kv','levId'); LEV = (kl && kl.v) || null;
+  const kn = await store.get('kv','levNombre'); LEV_NOMBRE = (kn && kn.v) || '';
   if(SESION_NUBE) arrancarSesionNube();
   return true;
 }
@@ -1549,7 +1550,10 @@ async function crearLevantamientoNube(){
     const { error: e2 } = await SB.from('equipos').insert(filasDB.slice(i,i+300));
     if(e2){ toast('Error al subir equipos: '+e2.message, 5000); return; }
   }
+  LEVS = [lev, ...LEVS.filter(l=>l.id!==lev.id)];
+  await store.put('kv',{k:'levNombre', v:lev.nombre});
   await usarLevantamiento(lev.id, true);
+  await listarLevantamientos();
   PADRON_TMP = null; UBIC_SEL = new Set(); ESTATUS_SEL = new Set(); COND_COL = null; COND_SEL = new Set();
   toast(`Levantamiento creado con ${filasDB.length} equipos`, 4000);
 }
@@ -1563,8 +1567,10 @@ async function usarLevantamiento(id, limpiar){
     await store.put('kv',{k:'ultimoPull', v:null});
   }
   LEV = id; await store.put('kv',{k:'levId', v:id});
+  if(!LEVS.some(l=>l.id===id)) await listarLevantamientos();
   const lev = LEVS.find(l=>l.id===id);
   if(lev){
+    await store.put('kv',{k:'levNombre', v:lev.nombre});
     S.sesion = {patio:(lev.patios||[]).join(' + '), fecha:lev.fecha, notas:lev.notas||'', criterio:lev.criterio||''};
     await guardarSesion();
   }
@@ -1703,6 +1709,15 @@ async function bajarCambios(){
   render();
 }
 
+async function bajarTodo(){
+  if(!SB || !SESION_NUBE || !LEV){ toast('Sin levantamiento activo'); return; }
+  if(pendientes() && !confirm(`Tienes ${pendientes()} registros sin subir. Se suben primero y luego se baja todo. ¿Continuar?`)) return;
+  await store.put('kv',{k:'ultimoPull', v:null});
+  toast('Descargando…');
+  await sincronizar();
+  toast(`${S.equipos.length} equipos en el dispositivo`, 4000);
+}
+
 /* ----------------------------- En vivo ------------------------------ */
 let canal = null;
 function suscribirVivo(){
@@ -1727,10 +1742,12 @@ function tarjetaNube(){
     <p class="hint">Sin iniciar sesión la app funciona igual, pero guarda solo en este celular.</p></div>`;
   const pend = pendientes();
   const lev = LEVS.find(l=>l.id===LEV);
+  const nombreLev = lev ? lev.nombre : (LEV ? (LEV_NOMBRE || 'activo') : 'ninguno');
   return `<div class="card">
     <table class="mini">
       <tr><td>Sesión</td><td style="font-family:var(--body);font-weight:600">${esc(SESION_NUBE.user.email)}</td></tr>
-      <tr><td>Levantamiento</td><td style="font-family:var(--body);font-weight:600">${lev?esc(lev.nombre):'ninguno'}</td></tr>
+      <tr><td>Levantamiento</td><td style="font-family:var(--body);font-weight:600">${esc(nombreLev)}</td></tr>
+      <tr><td>Equipos descargados</td><td>${S.equipos.length}</td></tr>
       <tr><td>Sin subir</td><td>${pend}</td></tr>
       <tr><td>Última sincronización</td><td style="font-family:var(--body)">${esc(SYNC.ultimo||'—')}</td></tr>
     </table>
@@ -1740,6 +1757,7 @@ function tarjetaNube(){
       <button class="btn dark" onclick="sincronizar()" ${LEV?'':'disabled'}>Sincronizar ahora</button>
       <button class="btn ghost" onclick="salirNube()">Cerrar sesión</button>
     </div>
+    ${LEV?`<button class="btn ghost wide sm" style="margin-top:8px" onclick="bajarTodo()">Volver a bajar todo del servidor</button>`:''}
     ${LEVS.length?`<h2 class="sec">Levantamientos abiertos</h2>
       <div class="chips">${LEVS.filter(l=>l.estado==='abierto').map(l=>
         `<button class="chip ${l.id===LEV?'on':''}" onclick="usarLevantamiento('${l.id}', ${l.id===LEV?'false':'true'})">${esc(l.nombre)}</button>`).join('')}</div>
