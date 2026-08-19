@@ -186,7 +186,7 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
       <h1>Levantamiento de patio</h1>
       <div class="sub" id="hSub">Sin sesión activa</div>
     </div>
-    <div class="right" id="hCount"></div>
+    <div class="right"><span id="hCount"></span><br><span id="hSync" style="font-size:10px"></span></div>
   </div>
   <div class="progress"><i id="hBar"></i></div>
 </header>
@@ -250,7 +250,7 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
    ===================================================================== */
 
 /* ------------------------- CATÁLOGOS EDITABLES ---------------------- */
-const APP_VERSION = 'v7 · 18 ago 2026';
+const APP_VERSION = 'v8 · 19 ago 2026 · nube';
 
 const CAT = {
   patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
@@ -294,7 +294,9 @@ function aprenderDelArchivo(filas){
 /* ------------------------------ UTILS ------------------------------- */
 const $  = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
-const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+const uid = () => (crypto.randomUUID ? crypto.randomUUID()
+  : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random()*16|0; return (c==='x'?r:(r&0x3|0x8)).toString(16); }));
 const esc = s => String(s??"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const norm = s => String(s??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().replace(/[^A-Z0-9]/g," ").replace(/\s+/g," ").trim();
 const hoy = () => new Date().toISOString().slice(0,10);
@@ -385,7 +387,7 @@ const nuevoEquipo = o => Object.assign({
 }, o||{});
 
 const nuevoSuelto = o => Object.assign({
-  id: uid(), tipo:'', descripcion:'', marca:'', medida:'', cantidad:1, unidad:'Pieza',
+  id: uid(), tipo:'', patio:'', descripcion:'', marca:'', medida:'', cantidad:1, unidad:'Pieza',
   condicion:'Usado - Bueno', zona:'', propietario:'', obs:'', ts:''
 }, o||{});
 
@@ -400,10 +402,12 @@ async function cargarTodo(){
   S.equipos = await store.all('equipos');
   S.sueltos = await store.all('sueltos');
   S.fotos   = (await store.all('fotos')).map(f=>({id:f.id, refId:f.refId, refTipo:f.refTipo, angulo:f.angulo,
-                nombre:f.nombre, thumb:f.thumb, disp:f.disp||'', externa:!!f.externa, ts:f.ts}));
+                nombre:f.nombre, thumb:f.thumb, disp:f.disp||'', externa:!!f.externa, ruta:f.ruta||'', ts:f.ts}));
   S.equipos.sort((a,b)=> (a.niv||'').localeCompare(b.niv||''));
 }
 const guardarSesion = () => store.put('kv',{k:'sesion', v:S.sesion});
+async function putEquipo(e){ e.dirty = true; e.actualizado = new Date().toISOString(); await store.put('equipos', e); pedirSync(); }
+async function putSuelto(x){ x.dirty = true; x.actualizado = new Date().toISOString(); await store.put('sueltos', x); pedirSync(); }
 const fotosDe = id => S.fotos.filter(f=>f.refId===id);
 const contarFotos = id => fotosDe(id).length;
 
@@ -417,7 +421,8 @@ function pintarHeader(){
   const c = conteos();
   const verificados = c.encontrado + c.faltante + c.excedente;
   $('#hSub').textContent = S.sesion ? `${S.sesion.patio} · ${S.sesion.fecha}` : 'Sin sesión activa — abre la pestaña Sesión';
-  $('#hCount').innerHTML = S.sesion ? `${verificados}/${c.total}<br><span style="opacity:.7">revisados</span>` : '';
+  $('#hCount').innerHTML = S.sesion ? `${verificados}/${c.total} revisados` : '';
+  pintarNube();
   $('#hBar').style.width = c.total ? (verificados/c.total*100)+'%' : '0%';
 }
 
@@ -503,6 +508,9 @@ function vistaSueltos(){
 function vistaSesion(){
   const s = S.sesion;
   $('#view-sesion').innerHTML = `
+    <h2 class="sec">Nube</h2>
+    <div id="nubeBox">${tarjetaNube()}</div>
+
     <h2 class="sec">Sesión de levantamiento</h2>
     <div class="card">
       <label>Patio(s) de la visita</label>
@@ -621,7 +629,7 @@ async function cerrarFicha(){
   if(e){
     const vacio = !e.niv && !e.adicionales.length && !contarFotos(e.id) && !e.obs;
     if(e.origen==='manual' && vacio){ S.equipos = S.equipos.filter(x=>x.id!==e.id); await store.del('equipos', e.id); }
-    else await store.put('equipos', e);
+    else await putEquipo(e);
   }
   $('#sheetEquipo').classList.remove('open'); document.body.style.overflow='';
   S.fichaId=null; render();
@@ -742,7 +750,7 @@ function leerCampos(){
   if($('#fMotivo')) e.motivoFaltante=$('#fMotivo').value;
   return e;
 }
-function persistirFicha(){ const e=fichaActual(); if(e) store.put('equipos', e); }
+function persistirFicha(){ const e=fichaActual(); if(e) putEquipo(e); }
 
 async function guardarFicha(cerrar){
   const e = leerCampos(); if(!e) return;
@@ -750,13 +758,13 @@ async function guardarFicha(cerrar){
     if(!e.niv){ toast('Captura el NIV del equipo'); return; }
     if(e.estado!=='faltante'){ e.estado = (e.origen==='padron') ? 'encontrado' : 'excedente'; e.ts = stamp(); }
   }
-  await store.put('equipos', e);
+  await putEquipo(e);
   if(cerrar){ $('#sheetEquipo').classList.remove('open'); document.body.style.overflow=''; S.fichaId=null; render(); toast('Equipo confirmado en patio'); }
 }
 async function marcarFaltante(){
   const e = leerCampos(); if(!e) return;
   e.estado='faltante'; e.ts=stamp(); e.motivoFaltante = e.motivoFaltante || CAT.motivosFaltante[0];
-  await store.put('equipos', e);
+  await putEquipo(e);
   $('#sheetEquipo').classList.remove('open'); document.body.style.overflow=''; S.fichaId=null; render();
   toast('Marcado como no localizado');
 }
@@ -801,8 +809,9 @@ $('#fileFoto').onchange = async ev => {
     try{
       const {blob, thumb} = await comprimir(file);
       const rec = {id:uid(), refId:fotoDestino.refId, refTipo:fotoDestino.refTipo, angulo:fotoDestino.angulo,
-                   nombre:'', thumb, blob, disp: usuarioActual(), ts:stamp()};
+                   nombre:'', thumb, blob, disp: usuarioActual(), ts:stamp(), dirty:true, ruta:''};
       await store.put('fotos', rec);
+      pedirSync();
       S.fotos.push({id:rec.id, refId:rec.refId, refTipo:rec.refTipo, angulo:rec.angulo, thumb, disp:rec.disp, ts:rec.ts});
     }catch(err){ toast('No se pudo procesar una imagen'); }
   }
@@ -901,17 +910,18 @@ function leerSuelto(){
   s.medida=$('#uMedida').value.trim(); s.cantidad=parseInt($('#uCant').value)||0; s.unidad=$('#uUnidad').value;
   s.condicion=$('#uCond').value; s.zona=$('#uZona').value.trim(); s.propietario=$('#uProp').value.trim();
   s.obs=$('#uObs').value.trim(); s.ts = s.ts || stamp();
+  if(!s.patio) s.patio = (S.sesion && !/ \+ /.test(S.sesion.patio)) ? S.sesion.patio : (s.zona||'');
   return s;
 }
 async function guardarSuelto(){
   const s = leerSuelto(); if(!s) return;
   if(!s.tipo){ toast('Selecciona el tipo de adicional'); return; }
-  await store.put('sueltos', s);
+  await putSuelto(s);
   cerrarSuelto(); toast('Adicional guardado');
 }
 function cerrarSuelto(){
   const s = leerSuelto();
-  if(s){ if(!s.tipo && !contarFotos(s.id)){ S.sueltos = S.sueltos.filter(x=>x.id!==s.id); } else store.put('sueltos', s); }
+  if(s){ if(!s.tipo && !contarFotos(s.id)){ S.sueltos = S.sueltos.filter(x=>x.id!==s.id); } else putSuelto(s); }
   $('#sheetSuelto').classList.remove('open'); document.body.style.overflow=''; S.sueltoId=null; render();
 }
 async function borrarSuelto(){
@@ -1064,8 +1074,10 @@ function pintarSelectorEstatus(){
       <div class="sp"></div>
       <button class="btn primary sm" onclick="importarSeleccion()" ${total?'':'disabled'}>Cargar ${total} aquí</button>
     </div>
-    <button class="btn dark wide sm" style="margin-top:8px" onclick="publicarParaCelular()" ${total?'':'disabled'}>Generar padron.json para el celular</button>
-    <p class="hint">Descarga el archivo, súbelo a la raíz del repositorio y al abrir la liga en el celular la lista se carga sola.</p>`;
+    ${SESION_NUBE ? `<button class="btn dark wide sm" style="margin-top:8px" onclick="crearLevantamientoNube()" ${total?'':'disabled'}>Crear levantamiento en la nube</button>
+      <p class="hint">Sube la lista a Supabase: los demás celulares la ven al iniciar sesión, sin pasar por GitHub.</p>`
+    : `<button class="btn dark wide sm" style="margin-top:8px" onclick="publicarParaCelular()" ${total?'':'disabled'}>Generar padron.json para el celular</button>
+      <p class="hint">Descarga el archivo, súbelo a la raíz del repositorio y al abrir la liga en el celular la lista se carga sola.</p>`}`;
 }
 function toggleEstatus(k){ ESTATUS_SEL.has(k) ? ESTATUS_SEL.delete(k) : ESTATUS_SEL.add(k); pintarSelectorEstatus(); }
 function toggleClase(k){ COND_SEL.has(k) ? COND_SEL.delete(k) : COND_SEL.add(k); pintarSelectorEstatus(); }
@@ -1115,7 +1127,7 @@ async function importarFilas(filas, criterio, colClase){
     });
     if(r.ejeRetractil && /^(S|SI|X|1)$/.test(norm(r.ejeRetractil)))
       e.adicionales.push({tipo:'Eje retráctil', cantidad:1, marcaMedida:'', condicion:'Usado - Bueno', obs:'Según listado'});
-    S.equipos.push(e); await store.put('equipos', e); nuevos++; existentes.add(norm(r.niv));
+    S.equipos.push(e); await putEquipo(e); nuevos++; existentes.add(norm(r.niv));
   }
   if(S.sesion && criterio){ S.sesion.criterio = criterio; await guardarSesion(); }
   S.equipos.sort((a,b)=>(a.niv||'').localeCompare(b.niv||''));
@@ -1335,8 +1347,21 @@ async function descargarFotos(){
   if(!ok){ toast('Necesitas conexión una vez para habilitar el ZIP'); return; }
   toast('Armando el ZIP…');
   const zip = new JSZip();
-  const todas = (await store.all('fotos')).filter(f=>f.blob);
-  const ajenas = S.fotos.length - todas.length;
+  const locales = new Map((await store.all('fotos')).map(f=>[f.id,f]));
+  const todas = []; let faltan = 0;
+  for(const f of S.fotos){
+    const rec = locales.get(f.id) || f;
+    if(rec.blob){ todas.push(rec); continue; }
+    const ruta = rec.ruta || f.ruta;
+    if(SB && SESION_NUBE && ruta && navigator.onLine){
+      try{
+        const { data } = await SB.storage.from(NUBE.bucket).download(ruta);
+        if(data){ todas.push(Object.assign({}, f, {blob:data})); continue; }
+      }catch(e){}
+    }
+    faltan++;
+  }
+  const ajenas = faltan;
   const patio = limpio(S.sesion?S.sesion.patio:'');
   for(const f of todas){
     const e = S.equipos.find(x=>x.id===f.refId), s = S.sueltos.find(x=>x.id===f.refId);
@@ -1347,7 +1372,7 @@ async function descargarFotos(){
   }
   const blob = await zip.generateAsync({type:'blob'});
   bajar(blob, `Fotos_${patio}_${USUARIO?limpio(USUARIO)+'_':''}${S.sesion?S.sesion.fecha:hoy()}.zip`);
-  toast(ajenas ? `ZIP descargado. Faltan ${ajenas} fotos que están en otro celular: pide su ZIP y descomprime los dos en la misma carpeta.` : 'ZIP descargado', 5000);
+  toast(ajenas ? `ZIP descargado. Faltaron ${ajenas} fotos que no se pudieron bajar: revisa la conexión y vuelve a exportar.` : 'ZIP descargado', 5000);
 }
 function bajar(blob, nombre){
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre;
@@ -1435,7 +1460,302 @@ window.addEventListener('beforeunload', e=>{ if(S.fichaId) leerCampos() && persi
     try{ await navigator.serviceWorker.register('sw.js'); }catch(e){}
   }
   buscarPadronPublicado();
+  iniciarNube().then(ok => { if(ok) render(); });
+  setInterval(()=>{ if(navigator.onLine) sincronizar(); }, 60000);
 })();
+
+
+/* =====================================================================
+   NUBE — Supabase: login, sincronización con cola y avance en vivo
+   ===================================================================== */
+const NUBE = {
+  url: 'https://myfmstaeilegsoobllni.supabase.co',
+  key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15Zm1zdGFlaWxlZ3Nvb2JsbG5pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNjU2OTYsImV4cCI6MjEwMjc0MTY5Nn0.hwvkHX-Fx25IMB8FopzYgs1vEpc7fe1qCGZfr5TV9MU',
+  cdn: 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js',
+  bucket: 'fotos-patio'
+};
+let SB = null, SESION_NUBE = null, LEV = null, LEVS = [];
+const SYNC = {corriendo:false, pendiente:false, ultimo:'', error:'', subiendo:0};
+
+async function iniciarNube(){
+  if(!navigator.onLine && !SB) return false;
+  const ok = await cargarLib(NUBE.cdn, 'supabase');
+  if(!ok) return false;
+  try{
+    SB = window.supabase.createClient(NUBE.url, NUBE.key, {
+      db:{schema:'patio'},
+      auth:{persistSession:true, autoRefreshToken:true},
+      realtime:{params:{eventsPerSecond:2}}
+    });
+  }catch(e){ return false; }
+  const {data} = await SB.auth.getSession();
+  SESION_NUBE = data && data.session ? data.session : null;
+  SB.auth.onAuthStateChange((_ev, ses)=>{ SESION_NUBE = ses; if(ses) arrancarSesionNube(); render(); });
+  const kl = await store.get('kv','levId'); LEV = (kl && kl.v) || null;
+  if(SESION_NUBE) arrancarSesionNube();
+  return true;
+}
+async function arrancarSesionNube(){
+  if(!USUARIO && SESION_NUBE){
+    const { data } = await SB.from('capturistas').select('nombre').eq('uid', SESION_NUBE.user.id).maybeSingle();
+    await fijarUsuario((data && data.nombre) || SESION_NUBE.user.email.split('@')[0]);
+  }
+  await listarLevantamientos();
+  if(LEV){ suscribirVivo(); sincronizar(); }
+  render();
+}
+async function entrarNube(){
+  const correo = $('#nCorreo').value.trim(), pass = $('#nPass').value;
+  if(!correo || !pass){ toast('Captura correo y contraseña'); return; }
+  if(!SB && !(await iniciarNube())){ toast('Sin conexión con la nube'); return; }
+  $('#nBtn').disabled = true; $('#nBtn').textContent = 'Entrando…';
+  const { error } = await SB.auth.signInWithPassword({email:correo, password:pass});
+  if(error){ toast(error.message.includes('Invalid') ? 'Correo o contraseña incorrectos' : error.message, 4000); render(); return; }
+  toast('Sesión iniciada');
+}
+async function salirNube(){
+  if(!SB) return;
+  const pend = pendientes();
+  if(pend && !confirm(`Tienes ${pend} registros sin subir. Si cierras sesión no se van a sincronizar hasta que vuelvas a entrar. ¿Continuar?`)) return;
+  await SB.auth.signOut(); SESION_NUBE = null; render();
+}
+
+/* ---------------------- Levantamientos en la nube -------------------- */
+async function listarLevantamientos(){
+  if(!SB || !SESION_NUBE) return;
+  const { data, error } = await SB.from('levantamientos').select('*').order('fecha',{ascending:false}).limit(20);
+  if(!error) LEVS = data || [];
+}
+async function crearLevantamientoNube(){
+  if(!SB || !SESION_NUBE){ toast('Primero inicia sesión en la nube'); return; }
+  const filas = seleccionActual();
+  if(!filas.length){ toast('No hay equipos seleccionados'); return; }
+  const patios = [...UBIC_SEL];
+  const nombre = prompt('Nombre del levantamiento:', `${patios.join(' + ')||'Patios'} ${hoy()}`);
+  if(!nombre) return;
+  toast('Creando levantamiento…');
+  const { data: lev, error } = await SB.from('levantamientos')
+    .insert({nombre, patios, criterio:textoCriterio(), fecha:hoy(), creado_por:SESION_NUBE.user.id})
+    .select().single();
+  if(error){ toast('No se pudo crear: '+error.message, 5000); return; }
+
+  const filasDB = filas.filter(r=>r.niv).map(r=>({
+    id: uid(), levantamiento_id: lev.id, niv: r.niv, origen:'padron', estado:'pendiente',
+    patio: r.ubicacion||'', clasificacion: (COND_COL && r.extra ? (r.extra[COND_COL]||'') : ''),
+    tipo:r.tipo, marca:r.marca, anio:r.anio, placas:r.placas, ejes:r.ejes,
+    medida_llantas:r.medidaLlantas, padron:r
+  }));
+  for(let i=0;i<filasDB.length;i+=300){
+    const { error: e2 } = await SB.from('equipos').insert(filasDB.slice(i,i+300));
+    if(e2){ toast('Error al subir equipos: '+e2.message, 5000); return; }
+  }
+  await usarLevantamiento(lev.id, true);
+  PADRON_TMP = null; UBIC_SEL = new Set(); ESTATUS_SEL = new Set(); COND_COL = null; COND_SEL = new Set();
+  toast(`Levantamiento creado con ${filasDB.length} equipos`, 4000);
+}
+async function usarLevantamiento(id, limpiar){
+  if(limpiar && S.equipos.length){
+    if(!confirm('Se reemplaza lo que tengas capturado localmente por el levantamiento de la nube. ¿Continuar?')) return;
+  }
+  if(limpiar){
+    for(const st of ['equipos','sueltos','fotos']) await store.clear(st);
+    S.equipos=[]; S.sueltos=[]; S.fotos=[];
+    await store.put('kv',{k:'ultimoPull', v:null});
+  }
+  LEV = id; await store.put('kv',{k:'levId', v:id});
+  const lev = LEVS.find(l=>l.id===id);
+  if(lev){
+    S.sesion = {patio:(lev.patios||[]).join(' + '), fecha:lev.fecha, notas:lev.notas||'', criterio:lev.criterio||''};
+    await guardarSesion();
+  }
+  suscribirVivo();
+  await sincronizar();
+  render();
+}
+
+/* --------------------------- Sincronización -------------------------- */
+const pendientes = () =>
+  S.equipos.filter(e=>e.dirty).length + S.sueltos.filter(x=>x.dirty).length + S.fotos.filter(f=>!f.ruta && !f.externa).length;
+
+let syncTimer = null;
+function pedirSync(){
+  if(!SB || !SESION_NUBE || !LEV) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(()=>sincronizar(), 1500);
+}
+async function sincronizar(){
+  if(!SB || !SESION_NUBE || !LEV || !navigator.onLine) return;
+  if(SYNC.corriendo){ SYNC.pendiente = true; return; }
+  SYNC.corriendo = true; SYNC.error = ''; pintarNube();
+  try{
+    await subirEquipos();
+    await subirSueltos();
+    await subirFotos();
+    await bajarCambios();
+    SYNC.ultimo = stamp();
+  }catch(err){
+    SYNC.error = (err && err.message) || 'Falló la sincronización';
+  }
+  SYNC.corriendo = false; pintarNube(); pintarHeader();
+  if(SYNC.pendiente){ SYNC.pendiente = false; setTimeout(()=>sincronizar(), 800); }
+}
+const uidUser = () => SESION_NUBE ? SESION_NUBE.user.id : null;
+
+async function subirEquipos(){
+  const sucios = S.equipos.filter(e=>e.dirty && e.niv);
+  for(let i=0;i<sucios.length;i+=100){
+    const lote = sucios.slice(i,i+100).map(e=>({
+      id:e.id, levantamiento_id:LEV, niv:e.niv, origen:e.origen, estado:e.estado,
+      patio:e.patioFisico||'', clasificacion:e.clasificacion||'', tipo:e.tipo, marca:e.marca, anio:e.anio,
+      placas:e.placas, ejes:e.ejes, medida_llantas:e.medidaLlantas, zona:e.zona,
+      estatus_fisico:e.estatusFisico, motivo_faltante:e.motivoFaltante, obs:e.obs,
+      adicionales:e.adicionales, gps:e.gps, padron:e.padron,
+      capturado_por:e.capturadoPor||USUARIO, capturado_uid:uidUser()
+    }));
+    const { error } = await SB.from('equipos').upsert(lote, {onConflict:'id'});
+    if(error) throw error;
+    for(const e of sucios.slice(i,i+100)){ e.dirty = false; await store.put('equipos', e); }
+  }
+}
+async function subirSueltos(){
+  const sucios = S.sueltos.filter(x=>x.dirty && x.tipo);
+  for(const x of sucios){
+    const { error } = await SB.from('sueltos').upsert({
+      id:x.id, levantamiento_id:LEV, patio:x.patio||(S.sesion?S.sesion.patio:''), tipo:x.tipo,
+      descripcion:x.descripcion, marca:x.marca, medida:x.medida, cantidad:x.cantidad, unidad:x.unidad,
+      condicion:x.condicion, zona:x.zona, propietario:x.propietario, obs:x.obs,
+      capturado_por:USUARIO, capturado_uid:uidUser()
+    }, {onConflict:'id'});
+    if(error) throw error;
+    x.dirty = false; await store.put('sueltos', x);
+  }
+}
+async function subirFotos(){
+  const porSubir = S.fotos.filter(f=>!f.ruta && !f.externa);
+  SYNC.subiendo = porSubir.length; pintarNube();
+  for(const f of porSubir){
+    const rec = await store.get('fotos', f.id);
+    if(!rec || !rec.blob){ continue; }
+    const ruta = `${LEV}/${f.refId}/${f.id}.jpg`;
+    const { error } = await SB.storage.from(NUBE.bucket).upload(ruta, rec.blob, {contentType:'image/jpeg', upsert:true});
+    if(error) throw error;
+    const esEquipo = S.equipos.some(e=>e.id===f.refId);
+    const { error: e2 } = await SB.from('fotos').upsert({
+      id:f.id, levantamiento_id:LEV,
+      equipo_id: esEquipo ? f.refId : null, suelto_id: esEquipo ? null : f.refId,
+      angulo:f.angulo, ruta, capturado_por:f.disp||USUARIO, capturado_uid:uidUser()
+    }, {onConflict:'id'});
+    if(e2) throw e2;
+    rec.ruta = ruta; rec.dirty = false; await store.put('fotos', rec);
+    f.ruta = ruta;
+    SYNC.subiendo--; pintarNube();
+  }
+  SYNC.subiendo = 0;
+}
+async function bajarCambios(){
+  const k = await store.get('kv','ultimoPull');
+  const desde = (k && k.v) || null;
+  const ahora = new Date().toISOString();
+
+  let q = SB.from('equipos').select('*').eq('levantamiento_id', LEV);
+  if(desde) q = q.gt('actualizado_en', desde);
+  const { data: eqs, error } = await q;
+  if(error) throw error;
+  for(const r of (eqs||[])){
+    const local = S.equipos.find(e=>e.id===r.id);
+    if(local && local.dirty) continue;                       // lo mío aún no sube: no lo piso
+    const e = nuevoEquipo({
+      id:r.id, origen:r.origen, estado:r.estado, niv:r.niv, tipo:r.tipo, marca:r.marca, anio:r.anio,
+      placas:r.placas, ejes:r.ejes, medidaLlantas:r.medida_llantas, patioFisico:r.patio,
+      clasificacion:r.clasificacion, zona:r.zona, estatusFisico:r.estatus_fisico,
+      motivoFaltante:r.motivo_faltante, obs:r.obs, adicionales:r.adicionales||[], gps:r.gps,
+      padron:r.padron||{}, capturadoPor:r.capturado_por||'', ts:r.actualizado_en, dirty:false
+    });
+    if(local) Object.assign(local, e); else S.equipos.push(e);
+    await store.put('equipos', local || e);
+  }
+
+  let qs = SB.from('sueltos').select('*').eq('levantamiento_id', LEV);
+  if(desde) qs = qs.gt('actualizado_en', desde);
+  const { data: sus } = await qs;
+  for(const r of (sus||[])){
+    const local = S.sueltos.find(x=>x.id===r.id);
+    if(local && local.dirty) continue;
+    const x = nuevoSuelto({id:r.id, tipo:r.tipo, descripcion:r.descripcion, marca:r.marca, medida:r.medida,
+      cantidad:r.cantidad, unidad:r.unidad, condicion:r.condicion, zona:r.zona, patio:r.patio,
+      propietario:r.propietario, obs:r.obs, ts:r.actualizado_en, dirty:false});
+    if(local) Object.assign(local, x); else S.sueltos.push(x);
+    await store.put('sueltos', local || x);
+  }
+
+  let qf = SB.from('fotos').select('*').eq('levantamiento_id', LEV);
+  if(desde) qf = qf.gt('creado_en', desde);
+  const { data: fts } = await qf;
+  for(const r of (fts||[])){
+    if(S.fotos.some(f=>f.id===r.id)) continue;
+    const rec = {id:r.id, refId:r.equipo_id||r.suelto_id, refTipo:r.equipo_id?'equipo':'suelto',
+                 angulo:r.angulo, ruta:r.ruta, disp:r.capturado_por||'', externa:true, ts:r.creado_en};
+    await store.put('fotos', rec); S.fotos.push(rec);
+  }
+
+  await store.put('kv',{k:'ultimoPull', v:ahora});
+  S.equipos.sort((a,b)=>(a.niv||'').localeCompare(b.niv||''));
+  render();
+}
+
+/* ----------------------------- En vivo ------------------------------ */
+let canal = null;
+function suscribirVivo(){
+  if(!SB || !LEV) return;
+  if(canal){ SB.removeChannel(canal); canal = null; }
+  canal = SB.channel('lev-'+LEV)
+    .on('postgres_changes', {event:'*', schema:'patio', table:'equipos', filter:`levantamiento_id=eq.${LEV}`},
+        ()=>{ clearTimeout(syncTimer); syncTimer = setTimeout(()=>sincronizar(), 1200); })
+    .on('postgres_changes', {event:'*', schema:'patio', table:'sueltos', filter:`levantamiento_id=eq.${LEV}`},
+        ()=>{ clearTimeout(syncTimer); syncTimer = setTimeout(()=>sincronizar(), 1200); })
+    .subscribe();
+}
+
+/* --------------------------- Tarjeta Nube --------------------------- */
+function tarjetaNube(){
+  if(!SB) return `<div class="card"><div class="hint">Sin conexión con la nube. Al recuperar señal se conecta sola; mientras tanto puedes capturar todo aquí.</div></div>`;
+  if(!SESION_NUBE) return `<div class="card">
+    <label>Correo</label><input id="nCorreo" type="email" autocomplete="username" inputmode="email">
+    <label>Contraseña</label><input id="nPass" type="password" autocomplete="current-password">
+    <div style="height:10px"></div>
+    <button class="btn primary wide" id="nBtn" onclick="entrarNube()">Entrar</button>
+    <p class="hint">Sin iniciar sesión la app funciona igual, pero guarda solo en este celular.</p></div>`;
+  const pend = pendientes();
+  const lev = LEVS.find(l=>l.id===LEV);
+  return `<div class="card">
+    <table class="mini">
+      <tr><td>Sesión</td><td style="font-family:var(--body);font-weight:600">${esc(SESION_NUBE.user.email)}</td></tr>
+      <tr><td>Levantamiento</td><td style="font-family:var(--body);font-weight:600">${lev?esc(lev.nombre):'ninguno'}</td></tr>
+      <tr><td>Sin subir</td><td>${pend}</td></tr>
+      <tr><td>Última sincronización</td><td style="font-family:var(--body)">${esc(SYNC.ultimo||'—')}</td></tr>
+    </table>
+    ${SYNC.error?`<div class="banner b-warn" style="margin-top:8px">${esc(SYNC.error)}</div>`:''}
+    ${SYNC.corriendo?`<div class="hint" style="margin-top:8px">Sincronizando${SYNC.subiendo?` · ${SYNC.subiendo} fotos en camino`:''}…</div>`:''}
+    <div class="btnrow" style="margin-top:10px">
+      <button class="btn dark" onclick="sincronizar()" ${LEV?'':'disabled'}>Sincronizar ahora</button>
+      <button class="btn ghost" onclick="salirNube()">Cerrar sesión</button>
+    </div>
+    ${LEVS.length?`<h2 class="sec">Levantamientos abiertos</h2>
+      <div class="chips">${LEVS.filter(l=>l.estado==='abierto').map(l=>
+        `<button class="chip ${l.id===LEV?'on':''}" onclick="usarLevantamiento('${l.id}', ${l.id===LEV?'false':'true'})">${esc(l.nombre)}</button>`).join('')}</div>
+      <p class="hint">Al cambiar de levantamiento se descarga lo que ya capturaron los demás.</p>`:''}
+  </div>`;
+}
+function pintarNube(){
+  const el = $('#nubeBox'); if(el) el.innerHTML = tarjetaNube();
+  const ind = $('#hSync');
+  if(ind){
+    const pend = SB && SESION_NUBE && LEV ? pendientes() : 0;
+    ind.textContent = !SESION_NUBE ? 'local' : SYNC.corriendo ? 'subiendo…' : pend ? `${pend} en cola` : 'al día';
+    ind.style.color = !SESION_NUBE ? '#9FB2BD' : pend ? 'var(--amber)' : '#7FD1AE';
+  }
+}
+window.addEventListener('online', ()=>{ toast('Conexión recuperada'); sincronizar(); });
 
 </script>
 </body>
