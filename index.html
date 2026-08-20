@@ -250,7 +250,7 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
    ===================================================================== */
 
 /* ------------------------- CATÁLOGOS EDITABLES ---------------------- */
-const APP_VERSION = 'v15 · 20 ago 2026 · nube';
+const APP_VERSION = 'v16 · 20 ago 2026 · nube';
 
 const CAT = {
   patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
@@ -666,7 +666,8 @@ function pintarFicha(){
         <div><label>Medida llanta</label><input id="fMedida" value="${esc(e.medidaLlantas)}" placeholder="11R22.5"></div>
       </div>
       <div class="grid2">
-        <div><label>Patio donde está</label>${sugerido('fPatio', CAT.patios, e.patioFisico || (S.sesion&&!/ \+ /.test(S.sesion.patio)?S.sesion.patio:''), '')}</div>
+        <div><label>Patio donde está</label>
+          <select id="fPatio">${opcionesPatio(e.patioFisico || patioPorDefecto())}</select></div>
         <div><label>Zona / posición</label><input id="fZona" value="${esc(e.zona)}" placeholder="Zona 3, fila B"></div>
       </div>
       <label>Nuevo o usado</label>
@@ -707,6 +708,28 @@ function pintarFicha(){
     $('#fNivAviso').innerHTML = v && v.length!==17 ? `<div class="hint" style="color:var(--warn)">Lleva ${v.length} de 17 caracteres.</div>` : '';
   };
 }
+/* Los patios salen del propio levantamiento: nada de texto libre que
+   termine escrito de tres formas distintas. */
+function patiosDelLevantamiento(){
+  const set = new Set();
+  S.equipos.forEach(e=>{ if(e.patioFisico) set.add(e.patioFisico); });
+  S.equipos.forEach(e=>{ const u = e.padron && e.padron.ubicacion; if(u) set.add(u); });
+  if(S.sesion && S.sesion.patio) S.sesion.patio.split(' + ').forEach(p=>{ if(p.trim()) set.add(p.trim()); });
+  return [...set].sort((a,b)=>a.localeCompare(b,'es'));
+}
+function patioPorDefecto(){
+  const ps = patiosDelLevantamiento();
+  if(ps.length === 1) return ps[0];
+  if(S.filtroPatio && ps.includes(S.filtroPatio)) return S.filtroPatio;   // el que estás trabajando
+  return '';
+}
+function opcionesPatio(sel){
+  const ps = patiosDelLevantamiento();
+  const lista = (sel && !ps.some(p=>norm(p)===norm(sel))) ? [sel, ...ps] : ps;
+  return `<option value="">— Seleccionar —</option>` +
+    lista.map(p=>`<option value="${esc(p)}"${norm(p)===norm(sel)?' selected':''}>${esc(p)}</option>`).join('');
+}
+
 function pintarAdicionales(e){
   if(!e.adicionales.length) return `<div class="hint" style="padding:6px 2px">Sin adicionales registrados en este equipo.</div>`;
   return e.adicionales.map((a,i)=>`
@@ -744,8 +767,7 @@ function leerCampos(){
   e.tipo=$('#fTipo').value.trim(); e.marca=$('#fMarca').value.trim();
   recordar('tipos', e.tipo); recordar('marcas', e.marca);
   e.anio=$('#fAnio').value.trim(); e.ejes=$('#fEjes').value.trim(); e.medidaLlantas=$('#fMedida').value.trim();
-  e.zona=$('#fZona').value.trim(); e.patioFisico=$('#fPatio').value.trim(); e.clasificacion=$('#fClase').value.trim();
-  recordar('patios', e.patioFisico);
+  e.zona=$('#fZona').value.trim(); e.patioFisico=$('#fPatio').value; e.clasificacion=$('#fClase').value.trim();
   e.capturadoPor = usuarioActual() || e.capturadoPor;
   e.estatusFisico=$('#fEstFis').value; e.obs=$('#fObs').value.trim();
   if($('#fMotivo')) e.motivoFaltante=$('#fMotivo').value;
@@ -892,6 +914,8 @@ function pintarSuelto(){
         <div><label>Condición</label><select id="uCond">${opciones(CAT.condiciones, s.condicion)}</select></div>
         <div><label>Zona en patio</label><input id="uZona" value="${esc(s.zona)}" placeholder="Bodega, zona 2"></div>
       </div>
+      <label>Patio</label>
+      <select id="uPatio">${opcionesPatio(s.patio || patioPorDefecto())}</select>
       <label>Origen / propietario</label>
       <input id="uProp" value="${esc(s.propietario)}" placeholder="HT, JJ, 3C, cliente, sin identificar">
       <label>Observaciones</label>
@@ -911,7 +935,7 @@ function leerSuelto(){
   s.medida=$('#uMedida').value.trim(); s.cantidad=parseInt($('#uCant').value)||0; s.unidad=$('#uUnidad').value;
   s.condicion=$('#uCond').value; s.zona=$('#uZona').value.trim(); s.propietario=$('#uProp').value.trim();
   s.obs=$('#uObs').value.trim(); s.ts = s.ts || stamp();
-  if(!s.patio) s.patio = (S.sesion && !/ \+ /.test(S.sesion.patio)) ? S.sesion.patio : (s.zona||'');
+  s.patio = $('#uPatio') ? $('#uPatio').value : s.patio;
   return s;
 }
 async function guardarSuelto(){
