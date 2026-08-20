@@ -250,7 +250,7 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
    ===================================================================== */
 
 /* ------------------------- CATÁLOGOS EDITABLES ---------------------- */
-const APP_VERSION = 'v10 · 19 ago 2026 · nube';
+const APP_VERSION = 'v11 · 19 ago 2026 · nube';
 
 const CAT = {
   patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
@@ -1081,13 +1081,28 @@ function pintarReglas(){
     <div class="row" style="margin-top:12px">
       <button class="btn sm ghost" onclick="mostrarSelectorUbicacion()">← Cambiar patios</button>
       <div class="sp"></div>
-      <button class="btn primary sm" onclick="importarSeleccion()" ${total?'':'disabled'}>Cargar ${total} aquí</button>
+      ${LEV ? '' : `<button class="btn primary sm" onclick="importarSeleccion()" ${total?'':'disabled'}>Cargar ${total} aquí</button>`}
     </div>
+    <button class="btn ghost wide sm" style="margin-top:8px" onclick="guardarSeleccionExcel()" ${total?'':'disabled'}>Guardar esta selección en Excel</button>
+    <p class="hint">Genera un archivo con solo esos ${total} equipos y todas las columnas del original. La próxima vez cargas ese archivo y ya no filtras nada.</p>
     ${SESION_NUBE ? `<button class="btn dark wide sm" style="margin-top:8px" onclick="crearLevantamientoNube()" ${total?'':'disabled'}>Crear levantamiento en la nube (${total})</button>
       <p class="hint">Sube la lista a Supabase: los demás celulares la ven al iniciar sesión, sin pasar por GitHub.</p>`
     : `<button class="btn dark wide sm" style="margin-top:8px" onclick="publicarParaCelular()" ${total?'':'disabled'}>Generar padron.json para el celular (${total})</button>
       <p class="hint">Descarga el archivo, súbelo a la raíz del repositorio y al abrir la liga en el celular la lista se carga sola.</p>`}`;
 }
+async function guardarSeleccionExcel(){
+  const ok = await cargarLib(CDN.xlsx,'XLSX'); if(!ok){ toast('Sin conexión para generar Excel'); return; }
+  const filas = seleccionActual(); if(!filas.length) return;
+  const cols = PADRON_COLS;
+  const aoa = [cols, ...filas.map(r => cols.map(c => (r.extra && r.extra[c] != null) ? r.extra[c] : ''))];
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = cols.map(()=>({wch:16}));
+  XLSX.utils.book_append_sheet(wb, ws, 'INV');
+  XLSX.writeFile(wb, `Seleccion_${limpio([...UBIC_SEL].join('_'))}_${hoy()}.xlsx`);
+  toast(`${filas.length} equipos guardados en Excel`);
+}
+
 function bloquePatio(p){
   const cfg = REGLAS[p], filas = filasDePatio(p), n = filasSeleccionadasDe(p).length;
   return `<div class="card" style="margin:12px 0">
@@ -1503,6 +1518,8 @@ async function forzarActualizacion(){
 function render(){
   pintarHeader();
   ['equipos','sueltos','reporte','sesion'].forEach(t=>$('#view-'+t).classList.toggle('hidden', t!==S.tab));
+  // si estás a media selección del padrón, no se repinta la pestaña: se perdería lo elegido
+  if(S.tab==='sesion' && PADRON_TMP && $('#padronInfo')) return;
   if(S.tab==='equipos') vistaEquipos();
   if(S.tab==='sueltos') vistaSueltos();
   if(S.tab==='reporte') vistaReporte();
@@ -1671,7 +1688,38 @@ async function sincronizar(){
 }
 const uidUser = () => SESION_NUBE ? SESION_NUBE.user.id : null;
 
+/* Si un equipo ya existe en el servidor con otro id (por haberlo cargado
+   también en local), adoptamos el id del servidor en vez de insertar duplicado. */
+async function reconciliarIds(){
+  const sucios = S.equipos.filter(e=>e.dirty && e.niv);
+  if(!sucios.length) return;
+  const nivs = [...new Set(sucios.map(e=>e.niv))];
+  for(let i=0;i<nivs.length;i+=200){
+    const { data, error } = await SB.from('equipos').select('id,niv')
+      .eq('levantamiento_id', LEV).in('niv', nivs.slice(i,i+200));
+    if(error) throw error;
+    for(const row of (data||[])){
+      const local = sucios.find(e=>e.niv===row.niv && e.id!==row.id);
+      if(!local) continue;
+      const viejo = local.id;
+      if(S.equipos.some(e=>e.id===row.id)){          // ya lo tengo bajado: el local sobra
+        S.equipos = S.equipos.filter(e=>e.id!==viejo);
+        await store.del('equipos', viejo);
+        continue;
+      }
+      await store.del('equipos', viejo);
+      local.id = row.id;
+      await store.put('equipos', local);
+      for(const f of S.fotos.filter(f=>f.refId===viejo)){
+        const rec = await store.get('fotos', f.id);
+        if(rec){ rec.refId = row.id; await store.put('fotos', rec); }
+        f.refId = row.id;
+      }
+    }
+  }
+}
 async function subirEquipos(){
+  await reconciliarIds();
   const sucios = S.equipos.filter(e=>e.dirty && e.niv);
   for(let i=0;i<sucios.length;i+=100){
     const lote = sucios.slice(i,i+100).map(e=>({
@@ -1773,6 +1821,22 @@ async function bajarCambios(){
   render();
 }
 
+async function eliminarLevantamiento(){
+  if(!SB || !SESION_NUBE || !LEV) return;
+  const lev = LEVS.find(l=>l.id===LEV);
+  if(!confirm(`Se borra de la nube "${lev?lev.nombre:'este levantamiento'}" con todos sus equipos, adicionales y fotos, para todos los que lo tengan. ¿Continuar?`)) return;
+  if(!confirm('Última confirmación: no se puede deshacer.')) return;
+  const { error } = await SB.from('levantamientos').delete().eq('id', LEV);
+  if(error){ toast('No se pudo borrar: '+error.message, 5000); return; }
+  for(const st of ['equipos','sueltos','fotos']) await store.clear(st);
+  S.equipos=[]; S.sueltos=[]; S.fotos=[];
+  await store.put('kv',{k:'ultimoPull', v:null});
+  await store.put('kv',{k:'levId', v:null});
+  LEV = null; LEV_NOMBRE = '';
+  if(canal){ SB.removeChannel(canal); canal = null; }
+  await listarLevantamientos();
+  render(); toast('Levantamiento eliminado');
+}
 async function bajarTodo(){
   if(!SB || !SESION_NUBE || !LEV){ toast('Sin levantamiento activo'); return; }
   if(pendientes() && !confirm(`Tienes ${pendientes()} registros sin subir. Se suben primero y luego se baja todo. ¿Continuar?`)) return;
@@ -1821,7 +1885,8 @@ function tarjetaNube(){
       <button class="btn dark" onclick="sincronizar()" ${LEV?'':'disabled'}>Sincronizar ahora</button>
       <button class="btn ghost" onclick="salirNube()">Cerrar sesión</button>
     </div>
-    ${LEV?`<button class="btn ghost wide sm" style="margin-top:8px" onclick="bajarTodo()">Volver a bajar todo del servidor</button>`:''}
+    ${LEV?`<button class="btn ghost wide sm" style="margin-top:8px" onclick="bajarTodo()">Volver a bajar todo del servidor</button>
+      <button class="btn ghost wide sm" style="margin-top:6px" onclick="eliminarLevantamiento()">Eliminar este levantamiento</button>`:''}
     ${LEVS.length?`<h2 class="sec">Levantamientos abiertos</h2>
       <div class="chips">${LEVS.filter(l=>l.estado==='abierto').map(l=>
         `<button class="chip ${l.id===LEV?'on':''}" onclick="usarLevantamiento('${l.id}', ${l.id===LEV?'false':'true'})">${esc(l.nombre)}</button>`).join('')}</div>
