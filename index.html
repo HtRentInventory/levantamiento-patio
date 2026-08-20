@@ -250,7 +250,7 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
    ===================================================================== */
 
 /* ------------------------- CATÁLOGOS EDITABLES ---------------------- */
-const APP_VERSION = 'v9 · 19 ago 2026 · nube';
+const APP_VERSION = 'v10 · 19 ago 2026 · nube';
 
 const CAT = {
   patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
@@ -956,7 +956,7 @@ const ALIAS = {
   estatusAsignacion:['ESTATUS DE ASIGNACION','ESTATUS ASIGNACION'],
   estatusEntrega:['ESTATUS DE ENTREGA','ESTATUS ENTREGA']
 };
-let PADRON_TMP = null, UBIC_SEL = new Set(), ESTATUS_SEL = new Set(), COND_COL = null, COND_SEL = new Set();
+let PADRON_TMP = null, UBIC_SEL = new Set(), COND_COL = null, REGLAS = {};
 
 $('#fileExcel').onchange = async ev => {
   const file = ev.target.files[0]; if(!file) return;
@@ -975,7 +975,7 @@ $('#fileExcel').onchange = async ev => {
     }
     if(!datos || !datos.length){ toast('No encontré una columna NIV en el archivo'); return; }
     PADRON_TMP = datos;
-    UBIC_SEL = new Set(); ESTATUS_SEL = new Set(); COND_COL = null; COND_SEL = new Set();
+    UBIC_SEL = new Set(); COND_COL = null; REGLAS = {};
     aprenderDelArchivo(datos);
     mostrarSelectorUbicacion();
   }catch(err){ console.error(err); toast('No se pudo leer el archivo'); }
@@ -1021,7 +1021,7 @@ function mostrarSelectorUbicacion(){
     <div class="row" style="margin-top:10px">
       <button class="btn sm ghost" onclick="todosLosPatios()">${UBIC_SEL.size===lista.length?'Quitar todos':'Marcar todos'}</button>
       <div class="sp"></div>
-      <button class="btn primary sm" onclick="pasoEstatus()" ${sel?'':'disabled'}>Continuar con ${sel}</button>
+      <button class="btn primary sm" onclick="pasoEstatus()" ${sel?'':'disabled'}>Continuar · ${UBIC_SEL.size} patios</button>
     </div>`;
 }
 function togglePatio(u){ UBIC_SEL.has(u) ? UBIC_SEL.delete(u) : UBIC_SEL.add(u); mostrarSelectorUbicacion(); }
@@ -1034,72 +1034,136 @@ const etiquetaEstatus = r => (r.estatusEntrega||'').trim() || '(sin estatus)';
 const etiquetaClase = r => (COND_COL && r.extra ? (r.extra[COND_COL]||'').trim() : '') || '(sin dato)';
 const COL_CLASE = 'NUEVO O USADO';   // columna E del inventario
 const PISTAS_CLASE = ['NUEVO O USADO','CONDICION','CLASIFIC','SEMINUEVO','TIPO DE UNIDAD','CATEGORIA','ESTATUS DE UNIDAD'];
+/* ---- Reglas por patio: cada patio lleva sus propios criterios ------- */
+const filasDePatio = p => PADRON_TMP.filter(r => (r.ubicacion||'(sin ubicación)') === p);
+const filasUbicacion = () => UBIC_SEL.size ? PADRON_TMP.filter(r=>UBIC_SEL.has(r.ubicacion||'(sin ubicación)')) : PADRON_TMP;
+const etiquetaMarca = r => (r.marca||'').trim() || '(sin marca)';
+const CAMPOS = {
+  estatus: {titulo:'Estatus de entrega', valor: r=>etiquetaEstatus(r)},
+  clase:   {titulo:'Nuevo o usado',      valor: r=>etiquetaClase(r)},
+  marca:   {titulo:'Marca',              valor: r=>etiquetaMarca(r)}
+};
+const reglaVacia = () => ({estatus:[], clase:[], marca:[]});
+
 function pasoEstatus(){
-  const grupos = {};
-  filasUbicacion().forEach(r=>{ const k = etiquetaEstatus(r); grupos[k]=(grupos[k]||0)+1; });
-  ESTATUS_SEL = new Set(Object.keys(grupos).filter(k=>norm(k).includes('PENDIENTE')));
-  if(!ESTATUS_SEL.size && Object.keys(grupos).length===1) ESTATUS_SEL = new Set(Object.keys(grupos));
   if(COND_COL===null){
     COND_COL = PADRON_COLS.find(h=>norm(h)===COL_CLASE)
             || PADRON_COLS.find(h=>PISTAS_CLASE.some(p=>norm(h).includes(p))) || '';
-    COND_SEL = new Set();   // vacío = sin filtrar por clasificación
   }
-  pintarSelectorEstatus();
+  for(const p of UBIC_SEL){
+    if(REGLAS[p]) continue;
+    const pend = [...new Set(filasDePatio(p).map(etiquetaEstatus))].filter(k=>norm(k).includes('PENDIENTE'));
+    REGLAS[p] = {todo:false, reglas:[Object.assign(reglaVacia(), {estatus:pend})]};
+  }
+  for(const p of Object.keys(REGLAS)) if(!UBIC_SEL.has(p)) delete REGLAS[p];
+  pintarReglas();
 }
-const filasUbicacion = () => UBIC_SEL.size ? PADRON_TMP.filter(r=>UBIC_SEL.has(r.ubicacion||'(sin ubicación)')) : PADRON_TMP;
-function pintarSelectorEstatus(){
-  const filas = filasUbicacion();
-  const gEst = {}; filas.forEach(r=>{ const k=etiquetaEstatus(r); gEst[k]=(gEst[k]||0)+1; });
-  const porEstatus = filas.filter(r=>ESTATUS_SEL.has(etiquetaEstatus(r)));
-  const gCla = {}; if(COND_COL) porEstatus.forEach(r=>{ const k=etiquetaClase(r); gCla[k]=(gCla[k]||0)+1; });
-  const total = seleccionActual().length;
-  const listaEst = Object.entries(gEst).sort((a,b)=>b[1]-a[1]);
-  const listaCla = Object.entries(gCla).sort((a,b)=>b[1]-a[1]);
+function coincide(r, regla){
+  return Object.keys(CAMPOS).every(k => !regla[k].length || regla[k].includes(CAMPOS[k].valor(r)));
+}
+function filasSeleccionadasDe(p){
+  const cfg = REGLAS[p]; if(!cfg) return [];
+  const filas = filasDePatio(p);
+  return cfg.todo ? filas : filas.filter(r=>cfg.reglas.some(g=>coincide(r,g)));
+}
+function pintarReglas(){
+  const patios = [...UBIC_SEL];
+  const total = patios.reduce((n,p)=>n+filasSeleccionadasDe(p).length, 0);
   $('#padronInfo').innerHTML = `
-    <div class="banner b-info"><b>Paso 2:</b> ${esc([...UBIC_SEL].join(' + ')||'todas las ubicaciones')} · estatus de entrega.
-      Llega marcado <b>Pendiente</b>; agrega otro si también lo vas a contar.</div>
-    <div class="chips">${listaEst.map(([k,n])=>`<button class="chip ${ESTATUS_SEL.has(k)?'on':''}" onclick="toggleEstatus(${JSON.stringify(k).replace(/"/g,'&quot;')})">${esc(k)}<span class="n">${n}</span></button>`).join('')}</div>
-
-    <div class="banner b-info" style="margin-top:12px"><b>Paso 3:</b> nuevo, recuperado o seminuevo.
-      ${COND_COL ? `Se está usando la columna <b>${esc(COND_COL)}</b>.` : 'No encontré la columna «Nuevo o usado» en el archivo; elígela abajo.'}</div>
-    <select onchange="cambiarColumnaClase(this.value)">
-      <option value="">— Sin filtrar por clasificación —</option>
-      ${PADRON_COLS.map(h=>`<option value="${esc(h)}"${h===COND_COL?' selected':''}>${esc(h)}</option>`).join('')}
-    </select>
-    ${COND_COL ? `<div class="chips" style="margin-top:8px">${listaCla.map(([k,n])=>`<button class="chip ${COND_SEL.has(k)?'on':''}" onclick="toggleClase(${JSON.stringify(k).replace(/"/g,'&quot;')})">${esc(k)}<span class="n">${n}</span></button>`).join('')}</div>
-      <p class="hint">${COND_SEL.size?'Solo se cargan las clasificaciones marcadas.':'Sin marcar nada entran todas las clasificaciones.'}</p>` : ''}
-
+    <div class="banner b-info"><b>Paso 2:</b> qué vas a contabilizar en cada patio.
+      Dentro de un patio puedes armar varias reglas: un equipo entra si cumple <b>alguna</b> de ellas.</div>
+    ${COND_COL ? `<p class="hint">Nuevo o usado se lee de la columna <b>${esc(COND_COL)}</b>.
+      <select onchange="cambiarColumnaClase(this.value)" style="margin-top:6px">
+        <option value="">— Sin columna de nuevo/usado —</option>
+        ${PADRON_COLS.map(h=>`<option value="${esc(h)}"${h===COND_COL?' selected':''}>${esc(h)}</option>`).join('')}
+      </select></p>` : ''}
+    ${patios.map(bloquePatio).join('')}
     <div class="row" style="margin-top:12px">
       <button class="btn sm ghost" onclick="mostrarSelectorUbicacion()">← Cambiar patios</button>
       <div class="sp"></div>
       <button class="btn primary sm" onclick="importarSeleccion()" ${total?'':'disabled'}>Cargar ${total} aquí</button>
     </div>
-    ${SESION_NUBE ? `<button class="btn dark wide sm" style="margin-top:8px" onclick="crearLevantamientoNube()" ${total?'':'disabled'}>Crear levantamiento en la nube</button>
+    ${SESION_NUBE ? `<button class="btn dark wide sm" style="margin-top:8px" onclick="crearLevantamientoNube()" ${total?'':'disabled'}>Crear levantamiento en la nube (${total})</button>
       <p class="hint">Sube la lista a Supabase: los demás celulares la ven al iniciar sesión, sin pasar por GitHub.</p>`
-    : `<button class="btn dark wide sm" style="margin-top:8px" onclick="publicarParaCelular()" ${total?'':'disabled'}>Generar padron.json para el celular</button>
+    : `<button class="btn dark wide sm" style="margin-top:8px" onclick="publicarParaCelular()" ${total?'':'disabled'}>Generar padron.json para el celular (${total})</button>
       <p class="hint">Descarga el archivo, súbelo a la raíz del repositorio y al abrir la liga en el celular la lista se carga sola.</p>`}`;
 }
-function toggleEstatus(k){ ESTATUS_SEL.has(k) ? ESTATUS_SEL.delete(k) : ESTATUS_SEL.add(k); pintarSelectorEstatus(); }
-function toggleClase(k){ COND_SEL.has(k) ? COND_SEL.delete(k) : COND_SEL.add(k); pintarSelectorEstatus(); }
-function cambiarColumnaClase(h){ COND_COL = h; COND_SEL = new Set(); pintarSelectorEstatus(); }
+function bloquePatio(p){
+  const cfg = REGLAS[p], filas = filasDePatio(p), n = filasSeleccionadasDe(p).length;
+  return `<div class="card" style="margin:12px 0">
+    <div class="row">
+      <b style="font-size:15px">${esc(p)}</b><div class="sp"></div>
+      <span class="tag ${n?'t-enc':'t-pend'}">${n} de ${filas.length}</span>
+    </div>
+    <div class="chips" style="margin-top:8px">
+      <button class="chip ${cfg.todo?'on':''}" onclick="patioTodo(${JSON.stringify(p).replace(/"/g,'&quot;')})">Todo el patio</button>
+      <button class="chip ${cfg.todo?'':'on'}" onclick="patioFiltrar(${JSON.stringify(p).replace(/"/g,'&quot;')})">Con reglas</button>
+    </div>
+    ${cfg.todo ? `<p class="hint">Entra todo lo que el sistema tiene en este patio, sin importar estatus, marca ni condición.</p>`
+      : cfg.reglas.map((g,i)=>bloqueRegla(p,g,i)).join('') +
+        `<button class="btn ghost wide sm" style="margin-top:8px" onclick="agregarRegla(${JSON.stringify(p).replace(/"/g,'&quot;')})">+ Otra regla en este patio</button>`}
+  </div>`;
+}
+function bloqueRegla(p, g, i){
+  const filas = filasDePatio(p);
+  const grupo = campo => {
+    const m = {};
+    filas.forEach(r=>{ const k = CAMPOS[campo].valor(r); m[k]=(m[k]||0)+1; });
+    const lista = Object.entries(m).sort((a,b)=>b[1]-a[1]);
+    if(campo==='clase' && !COND_COL) return '';
+    return `<div style="margin-top:8px"><div class="eyebrow">${CAMPOS[campo].titulo}</div>
+      <div class="chips" style="margin-top:4px">${lista.map(([k,c])=>
+        `<button class="chip ${g[campo].includes(k)?'on':''}" onclick="toggleRegla(${JSON.stringify(p).replace(/"/g,'&quot;')},${i},'${campo}',${JSON.stringify(k).replace(/"/g,'&quot;')})">${esc(k)}<span class="n">${c}</span></button>`).join('')}</div></div>`;
+  };
+  const cuantos = filas.filter(r=>coincide(r,g)).length;
+  return `<div class="add-row" style="margin-top:8px">
+    <div class="row"><span class="eyebrow">Regla ${i+1}</span><div class="sp"></div>
+      <span class="count">${cuantos} equipos</span>
+      ${REGLAS[p].reglas.length>1?`<button class="btn sm ghost" onclick="quitarRegla(${JSON.stringify(p).replace(/"/g,'&quot;')},${i})">✕</button>`:''}
+    </div>
+    ${grupo('estatus')}${grupo('clase')}${grupo('marca')}
+    <p class="hint">Lo que dejes sin marcar en un renglón significa «cualquiera».</p>
+  </div>`;
+}
+function patioTodo(p){ REGLAS[p].todo = true; pintarReglas(); }
+function patioFiltrar(p){ REGLAS[p].todo = false; pintarReglas(); }
+function agregarRegla(p){ REGLAS[p].reglas.push(reglaVacia()); pintarReglas(); }
+function quitarRegla(p,i){ REGLAS[p].reglas.splice(i,1); pintarReglas(); }
+function toggleRegla(p,i,campo,valor){
+  const arr = REGLAS[p].reglas[i][campo];
+  const j = arr.indexOf(valor);
+  j>=0 ? arr.splice(j,1) : arr.push(valor);
+  pintarReglas();
+}
+function cambiarColumnaClase(h){
+  COND_COL = h;
+  Object.values(REGLAS).forEach(cfg=>cfg.reglas.forEach(g=>g.clase=[]));
+  pintarReglas();
+}
 async function importarSeleccion(){
   if(!PADRON_TMP) return;
   const filas = seleccionActual();
   const n = await importarFilas(filas, textoCriterio(), COND_COL);
   if(S.sesion && UBIC_SEL.size){ S.sesion.patio = [...UBIC_SEL].join(' + '); await guardarSesion(); }
-  PADRON_TMP = null; UBIC_SEL = new Set(); ESTATUS_SEL = new Set(); COND_COL = null; COND_SEL = new Set();
+  PADRON_TMP = null; UBIC_SEL = new Set(); COND_COL = null; REGLAS = {};
   render(); toast(`${n} equipos cargados a la lista`);
 }
 function seleccionActual(){
-  return filasUbicacion()
-    .filter(r=>ESTATUS_SEL.has(etiquetaEstatus(r)))
-    .filter(r=>!COND_COL || !COND_SEL.size || COND_SEL.has(etiquetaClase(r)));
+  const out = [];
+  for(const p of UBIC_SEL) out.push(...filasSeleccionadasDe(p));
+  return out;
 }
 function textoCriterio(){
-  const p = [...UBIC_SEL].join(' + ') || 'Todas las ubicaciones';
-  const e = `estatus de entrega: ${[...ESTATUS_SEL].join(', ')}`;
-  const c = (COND_COL && COND_SEL.size) ? ` · ${COND_COL}: ${[...COND_SEL].join(', ')}` : '';
-  return `${p} · ${e}${c}`;
+  return [...UBIC_SEL].map(p=>{
+    const cfg = REGLAS[p];
+    if(!cfg) return p;
+    if(cfg.todo) return `${p}: todo`;
+    const reglas = cfg.reglas.map(g=>{
+      const partes = Object.keys(CAMPOS).filter(k=>g[k].length).map(k=>`${CAMPOS[k].titulo.toLowerCase()} ${g[k].join('/')}`);
+      return partes.length ? partes.join(' + ') : 'todo';
+    });
+    return `${p}: ${reglas.join(' | ')}`;
+  }).join('  ·  ');
 }
 /* Genera el archivo que se sube al repositorio para que el celular lo tome solo */
 function publicarParaCelular(){
@@ -1554,7 +1618,7 @@ async function crearLevantamientoNube(){
   await store.put('kv',{k:'levNombre', v:lev.nombre});
   await usarLevantamiento(lev.id, true);
   await listarLevantamientos();
-  PADRON_TMP = null; UBIC_SEL = new Set(); ESTATUS_SEL = new Set(); COND_COL = null; COND_SEL = new Set();
+  PADRON_TMP = null; UBIC_SEL = new Set(); COND_COL = null; REGLAS = {};
   toast(`Levantamiento creado con ${filasDB.length} equipos`, 4000);
 }
 async function usarLevantamiento(id, limpiar){
