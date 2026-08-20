@@ -250,7 +250,7 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
    ===================================================================== */
 
 /* ------------------------- CATÁLOGOS EDITABLES ---------------------- */
-const APP_VERSION = 'v17 · 20 ago 2026 · nube';
+const APP_VERSION = 'v18 · 20 ago 2026 · nube';
 
 const CAT = {
   patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
@@ -387,6 +387,7 @@ const S = {
   filtro: 'todos',
   filtroPatio: '',
   repPatio: '',
+  repCap: '',
   busca: '',
   tab: 'equipos',
   fichaId: null,
@@ -400,7 +401,7 @@ const nuevoEquipo = o => Object.assign({
 }, o||{});
 
 const nuevoSuelto = o => Object.assign({
-  id: uid(), tipo:'', patio:'', descripcion:'', marca:'', medida:'', cantidad:1, unidad:'Pieza',
+  id: uid(), tipo:'', patio:'', capturadoPor:'', descripcion:'', marca:'', medida:'', cantidad:1, unidad:'Pieza',
   condicion:'Usado - Bueno', zona:'', propietario:'', obs:'', ts:''
 }, o||{});
 
@@ -948,6 +949,7 @@ function leerSuelto(){
   s.condicion=$('#uCond').value; s.zona=$('#uZona').value.trim(); s.propietario=$('#uProp').value.trim();
   s.obs=$('#uObs').value.trim(); s.ts = s.ts || stamp();
   s.patio = $('#uPatio') ? $('#uPatio').value : s.patio;
+  s.capturadoPor = s.capturadoPor || usuarioActual();
   return s;
 }
 async function guardarSuelto(){
@@ -1355,12 +1357,14 @@ function porCapturista(){
    y el ZIP salgan de un patio sin tocar el resto del código. */
 let RESPALDO_REP = null;
 function aplicarFiltroReporte(){
-  if(!S.repPatio) return;
+  if(!S.repPatio && !S.repCap) return;
   RESPALDO_REP = {eq:S.equipos, su:S.sueltos, fo:S.fotos};
-  S.equipos = RESPALDO_REP.eq.filter(e=>(e.patioFisico||'(sin patio)')===S.repPatio);
-  S.sueltos = RESPALDO_REP.su.filter(x=>(x.patio||'(sin patio)')===S.repPatio);
+  const okPatio = p => !S.repPatio || (p||'(sin patio)')===S.repPatio;
+  const okCap   = c => !S.repCap   || (c||'(sin capturista)')===S.repCap;
+  S.equipos = RESPALDO_REP.eq.filter(e=>okPatio(e.patioFisico) && (e.estado==='pendiente' ? !S.repCap : okCap(e.capturadoPor)));
+  S.sueltos = RESPALDO_REP.su.filter(x=>okPatio(x.patio) && okCap(x.capturadoPor));
   const ids = new Set([...S.equipos.map(e=>e.id), ...S.sueltos.map(x=>x.id)]);
-  S.fotos = RESPALDO_REP.fo.filter(f=>ids.has(f.refId));
+  S.fotos = RESPALDO_REP.fo.filter(f=>ids.has(f.refId) && (!S.repCap || (f.disp||'(sin capturista)')===S.repCap));
 }
 function quitarFiltroReporte(){
   if(!RESPALDO_REP) return;
@@ -1368,17 +1372,25 @@ function quitarFiltroReporte(){
   RESPALDO_REP = null;
 }
 function chipsReporte(){
-  const g = {}; S.equipos.forEach(e=>{ const k=e.patioFisico||'(sin patio)'; g[k]=(g[k]||0)+1; });
-  const lista = Object.entries(g).sort((a,b)=>b[1]-a[1]);
-  if(lista.length<2) return '';
+  const gP = {}; S.equipos.forEach(e=>{ const k=e.patioFisico||'(sin patio)'; gP[k]=(gP[k]||0)+1; });
+  const gC = {}; S.equipos.filter(e=>e.estado!=='pendiente').forEach(e=>{ const k=e.capturadoPor||'(sin capturista)'; gC[k]=(gC[k]||0)+1; });
+  const patios = Object.entries(gP).sort((a,b)=>b[1]-a[1]);
+  const caps   = Object.entries(gC).sort((a,b)=>b[1]-a[1]);
+  if(patios.length<2 && caps.length<2) return '';
   return `<div class="card tight"><div class="eyebrow" style="margin-bottom:6px">Alcance del reporte</div>
-    <div class="chips">
+    ${patios.length>1?`<div class="chips">
       <button class="chip ${S.repPatio?'':'on'}" onclick="setRepPatio('')">Todos los patios</button>
-      ${lista.map(([p,n])=>`<button class="chip ${S.repPatio===p?'on':''}" onclick="setRepPatio(${JSON.stringify(p).replace(/"/g,'&quot;')})">${esc(p)}<span class="n">${n}</span></button>`).join('')}
-    </div>
-    <p class="hint">Puedes entregar un patio ya terminado sin esperar a los demás. Lo que descargues sale solo de lo marcado.</p></div>`;
+      ${patios.map(([p,n])=>`<button class="chip ${S.repPatio===p?'on':''}" onclick="setRepPatio(${JSON.stringify(p).replace(/"/g,'&quot;')})">${esc(p)}<span class="n">${n}</span></button>`).join('')}
+    </div>`:''}
+    ${caps.length>1?`<div class="chips" style="margin-top:8px">
+      <button class="chip ${S.repCap?'':'on'}" onclick="setRepCap('')">Todos los capturistas</button>
+      ${caps.map(([c,n])=>`<button class="chip ${S.repCap===c?'on':''}" onclick="setRepCap(${JSON.stringify(c).replace(/"/g,'&quot;')})">${esc(c)}<span class="n">${n}</span></button>`).join('')}
+    </div>`:''}
+    <p class="hint">Puedes entregar un patio terminado sin esperar a los demás, o sacar solo lo que levantó una persona. Lo que descargues sale de lo marcado.
+      ${S.repCap?'<br>Con un capturista marcado no se incluyen los equipos que nadie ha revisado.':''}</p></div>`;
 }
 function setRepPatio(p){ S.repPatio = p; vistaReporte(); }
+function setRepCap(c){ S.repCap = c; vistaReporte(); }
 
 /* ------------------------- GENERAR EXCEL --------------------------- */
 async function generarExcel(){
@@ -1408,6 +1420,7 @@ async function generarExcel(){
   const p = [
     ['LEVANTAMIENTO FÍSICO DE INVENTARIO'],[],
     ['Patio', S.repPatio || ses.patio],['Fecha', ses.fecha],
+    ['Alcance', S.repCap ? `solo lo capturado por ${S.repCap}` : 'todos los capturistas'],
     ['Capturistas', [...new Set(S.equipos.filter(e=>e.estado!=='pendiente'&&e.capturadoPor).map(e=>e.capturadoPor))].join(', ') || USUARIO],
     ['Generado', stamp()],['Criterio de carga del listado', ses.criterio||''],['Notas', ses.notas],[],
     ['CONCILIACIÓN CONTRA LISTADO'],
@@ -1480,7 +1493,7 @@ async function generarExcel(){
   wsFo['!cols']=[{wch:16},{wch:22},{wch:18},{wch:44},{wch:16},{wch:18}];
   XLSX.utils.book_append_sheet(wb, wsFo, 'Índice de fotos');
 
-  const nombre = `Levantamiento_${limpio(S.repPatio || ses.patio)}_${ses.fecha}.xlsx`;
+  const nombre = `Levantamiento_${limpio(S.repPatio || ses.patio)}${S.repCap?'_'+limpio(S.repCap):''}_${ses.fecha}.xlsx`;
   XLSX.writeFile(wb, nombre);
   quitarFiltroReporte();
   toast('Reporte generado');
@@ -1541,7 +1554,7 @@ async function armarZipFotos(){
     if(m.percent % 5 < 1) progreso('Comprimiendo…', `${Math.round(m.percent)}%`);
   });
   cerrarProgreso();
-  bajar(blob, `Fotos_${limpio(S.repPatio)||patio}_${S.sesion?S.sesion.fecha:hoy()}.zip`);
+  bajar(blob, `Fotos_${limpio(S.repPatio)||patio}${S.repCap?'_'+limpio(S.repCap):''}_${S.sesion?S.sesion.fecha:hoy()}.zip`);
   quitarFiltroReporte();
   const mb = (blob.size/1048576).toFixed(1);
   toast(ajenas
@@ -1884,7 +1897,7 @@ async function subirSueltos(){
       id:x.id, levantamiento_id:LEV, patio:x.patio||(S.sesion?S.sesion.patio:''), tipo:x.tipo,
       descripcion:x.descripcion, marca:x.marca, medida:x.medida, cantidad:x.cantidad, unidad:x.unidad,
       condicion:x.condicion, zona:x.zona, propietario:x.propietario, obs:x.obs,
-      capturado_por:USUARIO, capturado_uid:uidUser()
+      capturado_por:x.capturadoPor||USUARIO, capturado_uid:uidUser()
     }, {onConflict:'id'});
     if(error) throw error;
     x.dirty = false; await store.put('sueltos', x);
@@ -1943,7 +1956,7 @@ async function bajarCambios(){
     if(local && local.dirty) continue;
     const x = nuevoSuelto({id:r.id, tipo:r.tipo, descripcion:r.descripcion, marca:r.marca, medida:r.medida,
       cantidad:r.cantidad, unidad:r.unidad, condicion:r.condicion, zona:r.zona, patio:r.patio,
-      propietario:r.propietario, obs:r.obs, ts:r.actualizado_en, dirty:false});
+      propietario:r.propietario, obs:r.obs, capturadoPor:r.capturado_por||'', ts:r.actualizado_en, dirty:false});
     if(local) Object.assign(local, x); else S.sueltos.push(x);
     await store.put('sueltos', local || x);
   }
