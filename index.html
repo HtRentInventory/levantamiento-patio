@@ -250,7 +250,7 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
    ===================================================================== */
 
 /* ------------------------- CATÁLOGOS EDITABLES ---------------------- */
-const APP_VERSION = 'v14 · 20 ago 2026 · nube';
+const APP_VERSION = 'v15 · 20 ago 2026 · nube';
 
 const CAT = {
   patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
@@ -1765,7 +1765,10 @@ async function sincronizar(){
     await bajarCambios();
     SYNC.ultimo = stamp();
   }catch(err){
-    SYNC.error = (err && err.message) || 'Falló la sincronización';
+    const m = (err && err.message) || '';
+    SYNC.error = m.includes('foreign key')
+      ? 'El levantamiento al que apunta este dispositivo ya no existe en la nube. Abajo, en la lista, usa «Mover mis capturas a este levantamiento» para pasarlas al bueno. No uses «Usar»: eso borra lo de este aparato.'
+      : (m || 'Falló la sincronización');
   }
   SYNC.corriendo = false; pintarNube(); pintarHeader();
   if(SYNC.pendiente){ SYNC.pendiente = false; setTimeout(()=>sincronizar(), 800); }
@@ -1921,6 +1924,42 @@ async function eliminarLevantamiento(){
   await listarLevantamientos();
   render(); toast('Levantamiento eliminado');
 }
+/* Rescate: pasa lo capturado en este dispositivo a otro levantamiento
+   sin borrar nada. Sirve cuando el levantamiento original ya no existe. */
+async function moverAqui(id){
+  const l = LEVS.find(x=>x.id===id);
+  const capturados = S.equipos.filter(e=>e.estado!=='pendiente');
+  if(!confirm(`Se pasan ${capturados.length} equipos capturados${S.sueltos.length?` y ${S.sueltos.length} adicionales sueltos`:''} a "${l?l.nombre:'este levantamiento'}".\n\nLos equipos que aún no revisas se descartan y se vuelve a bajar la lista buena. ¿Continuar?`)) return;
+  toast('Moviendo capturas…');
+
+  const conservar = new Set(capturados.map(e=>e.id));
+  for(const e of S.equipos) if(!conservar.has(e.id)) await store.del('equipos', e.id);
+  S.equipos = capturados;
+  for(const e of S.equipos){ e.dirty = true; await store.put('equipos', e); }
+  for(const x of S.sueltos){ x.dirty = true; await store.put('sueltos', x); }
+
+  const quedan = [];
+  for(const f of S.fotos){
+    const rec = await store.get('fotos', f.id);
+    if(rec && rec.blob && conservar.has(rec.refId) || (rec && rec.blob && S.sueltos.some(x=>x.id===rec.refId))){
+      rec.ruta = ''; rec.dirty = true; await store.put('fotos', rec);
+      f.ruta = ''; f.externa = false; quedan.push(f);
+    } else {
+      await store.del('fotos', f.id);
+    }
+  }
+  S.fotos = quedan;
+
+  LEV = id; LEV_NOMBRE = l ? l.nombre : '';
+  await store.put('kv',{k:'levId', v:id});
+  await store.put('kv',{k:'levNombre', v:LEV_NOMBRE});
+  await store.put('kv',{k:'ultimoPull', v:null});
+  suscribirVivo();
+  await sincronizar();
+  render();
+  toast(`Listo: ${capturados.length} capturas movidas`, 5000);
+}
+
 async function bajarTodo(){
   if(!SB || !SESION_NUBE || !LEV){ toast('Sin levantamiento activo'); return; }
   if(pendientes() && !confirm(`Tienes ${pendientes()} registros sin subir. Se suben primero y luego se baja todo. ¿Continuar?`)) return;
@@ -1995,6 +2034,7 @@ function listaLevs(){
         ${l.id===LEV ? `<span class="tag t-enc">Activo</span>`
           : `<button class="btn sm" onclick="usarLevantamiento('${l.id}', true)">Usar</button>`}
       </div>
+      ${l.id!==LEV && pendientes() ? `<button class="btn primary sm wide" style="margin-top:6px" onclick="moverAqui('${l.id}')">Mover mis ${pendientes()} capturas a este levantamiento</button>` : ''}
       <div class="row" style="margin-top:6px">
         ${l.estado==='cerrado'
           ? `<button class="btn sm ghost" onclick="cambiarEstadoLev('${l.id}','abierto')">Reabrir</button>`
