@@ -250,7 +250,7 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
    ===================================================================== */
 
 /* ------------------------- CATÁLOGOS EDITABLES ---------------------- */
-const APP_VERSION = 'v11 · 19 ago 2026 · nube';
+const APP_VERSION = 'v12 · 19 ago 2026 · nube';
 
 const CAT = {
   patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
@@ -1527,6 +1527,7 @@ function render(){
 }
 $$('nav.tabs button').forEach(b=>b.onclick = ()=>{
   S.tab = b.dataset.tab; $$('nav.tabs button').forEach(x=>x.classList.toggle('on', x===b)); render();
+  if(S.tab==='sesion' && SB && SESION_NUBE && navigator.onLine) listarLevantamientos().then(pintarNube);
 });
 window.addEventListener('beforeunload', e=>{ if(S.fichaId) leerCampos() && persistirFicha(); });
 
@@ -1605,7 +1606,8 @@ async function salirNube(){
 /* ---------------------- Levantamientos en la nube -------------------- */
 async function listarLevantamientos(){
   if(!SB || !SESION_NUBE) return;
-  const { data, error } = await SB.from('levantamientos').select('*').order('fecha',{ascending:false}).limit(20);
+  const { data, error } = await SB.from('levantamientos').select('*')
+    .order('creado_en',{ascending:false}).limit(40);
   if(!error) LEVS = data || [];
 }
 async function crearLevantamientoNube(){
@@ -1886,12 +1888,61 @@ function tarjetaNube(){
       <button class="btn ghost" onclick="salirNube()">Cerrar sesión</button>
     </div>
     ${LEV?`<button class="btn ghost wide sm" style="margin-top:8px" onclick="bajarTodo()">Volver a bajar todo del servidor</button>
-      <button class="btn ghost wide sm" style="margin-top:6px" onclick="eliminarLevantamiento()">Eliminar este levantamiento</button>`:''}
-    ${LEVS.length?`<h2 class="sec">Levantamientos abiertos</h2>
-      <div class="chips">${LEVS.filter(l=>l.estado==='abierto').map(l=>
-        `<button class="chip ${l.id===LEV?'on':''}" onclick="usarLevantamiento('${l.id}', ${l.id===LEV?'false':'true'})">${esc(l.nombre)}</button>`).join('')}</div>
-      <p class="hint">Al cambiar de levantamiento se descarga lo que ya capturaron los demás.</p>`:''}
+`:''}
+    <h2 class="sec">Levantamientos</h2>
+    <div class="row" style="margin-bottom:6px">
+      <button class="btn sm ghost" onclick="refrescarLevs()">Actualizar lista</button>
+      <div class="sp"></div>
+      <button class="btn sm ghost" onclick="VER_CERRADOS=!VER_CERRADOS;pintarNube()">${VER_CERRADOS?'Ocultar cerrados':'Ver cerrados'}</button>
+    </div>
+    ${listaLevs()}
+    <p class="hint">Al cambiar de levantamiento se descarga lo que ya capturaron los demás. Cierra los que ya reportaste para que no te estorben.</p>
   </div>`;
+}
+let VER_CERRADOS = false;
+function listaLevs(){
+  const vis = LEVS.filter(l => VER_CERRADOS ? l.estado==='cerrado' : l.estado!=='cerrado');
+  if(!vis.length) return `<div class="hint">${VER_CERRADOS?'No hay levantamientos cerrados.':'No hay levantamientos abiertos. Carga el Excel y crea uno.'}</div>`;
+  return vis.slice(0,12).map(l=>`
+    <div class="item ${l.id===LEV?'encontrado':'pendiente'}" style="cursor:default">
+      <div class="row">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:14px">${esc(l.nombre)}</div>
+          <div class="meta">${esc(l.fecha)}${l.id===LEV?' · en uso en este dispositivo':''}</div>
+        </div>
+        ${l.id===LEV ? `<span class="tag t-enc">Activo</span>`
+          : `<button class="btn sm" onclick="usarLevantamiento('${l.id}', true)">Usar</button>`}
+      </div>
+      <div class="row" style="margin-top:6px">
+        ${l.estado==='cerrado'
+          ? `<button class="btn sm ghost" onclick="cambiarEstadoLev('${l.id}','abierto')">Reabrir</button>`
+          : `<button class="btn sm ghost" onclick="cambiarEstadoLev('${l.id}','cerrado')">Cerrar</button>`}
+        <button class="btn sm ghost" onclick="borrarLev('${l.id}')">Eliminar</button>
+      </div>
+    </div>`).join('');
+}
+async function refrescarLevs(){ await listarLevantamientos(); pintarNube(); toast('Lista actualizada'); }
+async function cambiarEstadoLev(id, estado){
+  const { error } = await SB.from('levantamientos').update({estado}).eq('id', id);
+  if(error){ toast('No se pudo: '+error.message, 4000); return; }
+  await listarLevantamientos(); pintarNube();
+  toast(estado==='cerrado' ? 'Levantamiento cerrado' : 'Levantamiento reabierto');
+}
+async function borrarLev(id){
+  const l = LEVS.find(x=>x.id===id);
+  if(!confirm(`Se borra de la nube "${l?l.nombre:'este levantamiento'}" con todos sus equipos, adicionales y fotos, para todos. ¿Continuar?`)) return;
+  if(!confirm('Última confirmación: no se puede deshacer.')) return;
+  const { error } = await SB.from('levantamientos').delete().eq('id', id);
+  if(error){ toast('No se pudo borrar: '+error.message, 5000); return; }
+  if(id === LEV){
+    for(const st of ['equipos','sueltos','fotos']) await store.clear(st);
+    S.equipos=[]; S.sueltos=[]; S.fotos=[];
+    await store.put('kv',{k:'ultimoPull', v:null});
+    await store.put('kv',{k:'levId', v:null});
+    LEV = null; LEV_NOMBRE = '';
+    if(canal){ SB.removeChannel(canal); canal = null; }
+  }
+  await listarLevantamientos(); render(); toast('Levantamiento eliminado');
 }
 function pintarNube(){
   const el = $('#nubeBox'); if(el) el.innerHTML = tarjetaNube();
