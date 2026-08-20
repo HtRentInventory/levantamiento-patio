@@ -250,7 +250,7 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
    ===================================================================== */
 
 /* ------------------------- CATÁLOGOS EDITABLES ---------------------- */
-const APP_VERSION = 'v16 · 20 ago 2026 · nube';
+const APP_VERSION = 'v17 · 20 ago 2026 · nube';
 
 const CAT = {
   patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
@@ -301,6 +301,18 @@ const esc = s => String(s??"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;'
 const norm = s => String(s??"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().replace(/[^A-Z0-9]/g," ").replace(/\s+/g," ").trim();
 const hoy = () => new Date().toISOString().slice(0,10);
 const stamp = () => new Date().toLocaleString('es-MX',{hour12:false});
+let cajaProg = null;
+function progreso(texto, sub){
+  if(!cajaProg){
+    cajaProg = document.createElement('div');
+    cajaProg.className = 'toast';
+    cajaProg.style.cssText += 'bottom:96px;min-width:80%;padding:14px 16px;text-align:left';
+    document.body.appendChild(cajaProg);
+  }
+  cajaProg.innerHTML = `<b>${esc(texto)}</b>${sub?`<br><span style="opacity:.8;font-size:12.5px">${esc(sub)}</span>`:''}`;
+}
+function cerrarProgreso(){ if(cajaProg){ cajaProg.remove(); cajaProg = null; } }
+
 function toast(msg, ms=2400){
   const t = document.createElement('div'); t.className='toast'; t.textContent = msg;
   document.body.appendChild(t); setTimeout(()=>t.remove(), ms);
@@ -1484,24 +1496,36 @@ function nombreArchivo(f){
 /* ------------------------ DESCARGAR FOTOS ZIP ----------------------- */
 async function descargarFotos(){
   if(!S.fotos.length){ toast('Todavía no hay fotos'); return; }
+  try{ await armarZipFotos(); }
+  catch(err){ cerrarProgreso(); quitarFiltroReporte(); toast('Falló el ZIP: '+((err&&err.message)||'error desconocido'), 7000); }
+}
+async function armarZipFotos(){
   const ok = await cargarLib(CDN.jszip,'JSZip');
   if(!ok){ toast('Necesitas conexión una vez para habilitar el ZIP'); return; }
   aplicarFiltroReporte();
-  toast('Armando el ZIP…');
   const zip = new JSZip();
+  progreso('Preparando el ZIP…');
   const locales = new Map((await store.all('fotos')).map(f=>[f.id,f]));
   const todas = []; let faltan = 0;
+  let i = 0;
   for(const f of S.fotos){
+    i++;
     const rec = locales.get(f.id) || f;
     if(rec.blob){ todas.push(rec); continue; }
     const ruta = rec.ruta || f.ruta;
     if(SB && SESION_NUBE && ruta && navigator.onLine){
+      progreso(`Bajando fotos de la nube… ${i} de ${S.fotos.length}`, 'No cierres esta pestaña');
       try{
         const { data } = await SB.storage.from(NUBE.bucket).download(ruta);
         if(data){ todas.push(Object.assign({}, f, {blob:data})); continue; }
       }catch(e){}
     }
     faltan++;
+  }
+  if(!todas.length){
+    cerrarProgreso();
+    toast('No se pudo obtener ninguna foto. Revisa la conexión y que hayas iniciado sesión en la nube.', 6000);
+    quitarFiltroReporte(); return;
   }
   const ajenas = faltan;
   const patio = limpio(S.sesion?S.sesion.patio:'');
@@ -1512,10 +1536,17 @@ async function descargarFotos(){
     else  carpeta = `_ADICIONALES SUELTOS/${limpio((s&&s.tipo)||'OTROS')}`;
     zip.folder(carpeta).file(nombreArchivo(f), f.blob);
   }
-  const blob = await zip.generateAsync({type:'blob'});
+  progreso('Comprimiendo…', `${todas.length} fotos`);
+  const blob = await zip.generateAsync({type:'blob'}, m => {
+    if(m.percent % 5 < 1) progreso('Comprimiendo…', `${Math.round(m.percent)}%`);
+  });
+  cerrarProgreso();
   bajar(blob, `Fotos_${limpio(S.repPatio)||patio}_${S.sesion?S.sesion.fecha:hoy()}.zip`);
   quitarFiltroReporte();
-  toast(ajenas ? `ZIP descargado. Faltaron ${ajenas} fotos que no se pudieron bajar: revisa la conexión y vuelve a exportar.` : 'ZIP descargado', 5000);
+  const mb = (blob.size/1048576).toFixed(1);
+  toast(ajenas
+    ? `ZIP de ${todas.length} fotos (${mb} MB) en tu carpeta de Descargas. Faltaron ${ajenas}: revisa la conexión y vuelve a exportar.`
+    : `ZIP de ${todas.length} fotos (${mb} MB) en tu carpeta de Descargas.`, 8000);
 }
 function bajar(blob, nombre){
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre;
