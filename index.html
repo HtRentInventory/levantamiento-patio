@@ -250,7 +250,7 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
    ===================================================================== */
 
 /* ------------------------- CATÁLOGOS EDITABLES ---------------------- */
-const APP_VERSION = 'v12 · 19 ago 2026 · nube';
+const APP_VERSION = 'v14 · 20 ago 2026 · nube';
 
 const CAT = {
   patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
@@ -374,6 +374,7 @@ const S = {
   fotos: [],           // {id, refId, angulo, nombre, thumb, blob, ts}
   filtro: 'todos',
   filtroPatio: '',
+  repPatio: '',
   busca: '',
   tab: 'equipos',
   fichaId: null,
@@ -1085,8 +1086,10 @@ function pintarReglas(){
     </div>
     <button class="btn ghost wide sm" style="margin-top:8px" onclick="guardarSeleccionExcel()" ${total?'':'disabled'}>Guardar esta selección en Excel</button>
     <p class="hint">Genera un archivo con solo esos ${total} equipos y todas las columnas del original. La próxima vez cargas ese archivo y ya no filtras nada.</p>
-    ${SESION_NUBE ? `<button class="btn dark wide sm" style="margin-top:8px" onclick="crearLevantamientoNube()" ${total?'':'disabled'}>Crear levantamiento en la nube (${total})</button>
-      <p class="hint">Sube la lista a Supabase: los demás celulares la ven al iniciar sesión, sin pasar por GitHub.</p>`
+    ${SESION_NUBE ? `<button class="btn dark wide sm" style="margin-top:8px" onclick="crearLevantamientoNube()" ${total?'':'disabled'}>Crear levantamiento nuevo (${total})</button>
+      ${LEV?`<button class="btn primary wide sm" style="margin-top:6px" onclick="agregarAlLevantamiento()" ${total?'':'disabled'}>Agregar estos ${total} al levantamiento activo</button>
+        <p class="hint">Suma tu lista a <b>${esc(LEV_NOMBRE||'el levantamiento en uso')}</b>, saltando los NIV que ya estén. Así varios pueden cargar patios distintos y terminar en un solo reporte.</p>`
+      :`<p class="hint">Sube la lista a Supabase: los demás celulares la ven al iniciar sesión, sin pasar por GitHub.</p>`}`
     : `<button class="btn dark wide sm" style="margin-top:8px" onclick="publicarParaCelular()" ${total?'':'disabled'}>Generar padron.json para el celular (${total})</button>
       <p class="hint">Descarga el archivo, súbelo a la raíz del repositorio y al abrir la liga en el celular la lista se carga sola.</p>`}`;
 }
@@ -1264,6 +1267,7 @@ function bannerPublicado(){
 
 /* ========================== VISTA: REPORTE ========================== */
 function vistaReporte(){
+  aplicarFiltroReporte();
   const c = conteos();
   const totalAdic = S.equipos.reduce((s,e)=>s+e.adicionales.reduce((t,a)=>t+(+a.cantidad||0),0),0);
   const totalSueltos = S.sueltos.reduce((s,x)=>s+(+x.cantidad||0),0);
@@ -1271,6 +1275,8 @@ function vistaReporte(){
     .forEach(e=>{ const k=e.tipo||'(sin tipo)'; porTipo[k]=(porTipo[k]||0)+1; });
   $('#view-reporte').innerHTML = `
     <h2 class="sec">Resultado del levantamiento</h2>
+    ${(quitarFiltroReporte(), chipsReporte())}
+    ${(aplicarFiltroReporte(), '')}
     <div class="kpi">
       <div><b>${c.encontrado}</b><span>Encontrados</span></div>
       <div><b>${c.faltante}</b><span>Faltantes</span></div>
@@ -1294,9 +1300,10 @@ function vistaReporte(){
       <button class="btn primary wide" onclick="generarExcel()">Reporte en Excel</button>
       <div style="height:8px"></div>
       <button class="btn dark wide" onclick="descargarFotos()">Fotos en ZIP (carpeta por NIV)</button>
-      <p class="hint">Las fotos se agrupan en carpetas <span class="mono">NIV — Tipo — Patio</span>, igual que tu clasificación de imágenes.</p>
+      <p class="hint">Las fotos se agrupan por patio y adentro una carpeta por equipo.</p>
     </div>
     <div style="height:20px"></div>`;
+  quitarFiltroReporte();
 }
 
 function porCapturista(){
@@ -1308,10 +1315,40 @@ function porCapturista(){
     <table class="mini">${lista.map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('')}</table></div>`;
 }
 
+/* Deja temporalmente en S solo lo del patio elegido, para que el reporte
+   y el ZIP salgan de un patio sin tocar el resto del código. */
+let RESPALDO_REP = null;
+function aplicarFiltroReporte(){
+  if(!S.repPatio) return;
+  RESPALDO_REP = {eq:S.equipos, su:S.sueltos, fo:S.fotos};
+  S.equipos = RESPALDO_REP.eq.filter(e=>(e.patioFisico||'(sin patio)')===S.repPatio);
+  S.sueltos = RESPALDO_REP.su.filter(x=>(x.patio||'(sin patio)')===S.repPatio);
+  const ids = new Set([...S.equipos.map(e=>e.id), ...S.sueltos.map(x=>x.id)]);
+  S.fotos = RESPALDO_REP.fo.filter(f=>ids.has(f.refId));
+}
+function quitarFiltroReporte(){
+  if(!RESPALDO_REP) return;
+  S.equipos = RESPALDO_REP.eq; S.sueltos = RESPALDO_REP.su; S.fotos = RESPALDO_REP.fo;
+  RESPALDO_REP = null;
+}
+function chipsReporte(){
+  const g = {}; S.equipos.forEach(e=>{ const k=e.patioFisico||'(sin patio)'; g[k]=(g[k]||0)+1; });
+  const lista = Object.entries(g).sort((a,b)=>b[1]-a[1]);
+  if(lista.length<2) return '';
+  return `<div class="card tight"><div class="eyebrow" style="margin-bottom:6px">Alcance del reporte</div>
+    <div class="chips">
+      <button class="chip ${S.repPatio?'':'on'}" onclick="setRepPatio('')">Todos los patios</button>
+      ${lista.map(([p,n])=>`<button class="chip ${S.repPatio===p?'on':''}" onclick="setRepPatio(${JSON.stringify(p).replace(/"/g,'&quot;')})">${esc(p)}<span class="n">${n}</span></button>`).join('')}
+    </div>
+    <p class="hint">Puedes entregar un patio ya terminado sin esperar a los demás. Lo que descargues sale solo de lo marcado.</p></div>`;
+}
+function setRepPatio(p){ S.repPatio = p; vistaReporte(); }
+
 /* ------------------------- GENERAR EXCEL --------------------------- */
 async function generarExcel(){
   const ok = await cargarLib(CDN.xlsx,'XLSX');
   if(!ok){ toast('Necesitas conexión una vez para habilitar la exportación a Excel'); return; }
+  aplicarFiltroReporte();
   const ses = S.sesion || {patio:'',fecha:hoy(),notas:''};
   const wb = XLSX.utils.book_new();
   const c = conteos();
@@ -1334,7 +1371,7 @@ async function generarExcel(){
   });
   const p = [
     ['LEVANTAMIENTO FÍSICO DE INVENTARIO'],[],
-    ['Patio', ses.patio],['Fecha', ses.fecha],
+    ['Patio', S.repPatio || ses.patio],['Fecha', ses.fecha],
     ['Capturistas', [...new Set(S.equipos.filter(e=>e.estado!=='pendiente'&&e.capturadoPor).map(e=>e.capturadoPor))].join(', ') || USUARIO],
     ['Generado', stamp()],['Criterio de carga del listado', ses.criterio||''],['Notas', ses.notas],[],
     ['CONCILIACIÓN CONTRA LISTADO'],
@@ -1407,8 +1444,9 @@ async function generarExcel(){
   wsFo['!cols']=[{wch:16},{wch:22},{wch:18},{wch:44},{wch:16},{wch:18}];
   XLSX.utils.book_append_sheet(wb, wsFo, 'Índice de fotos');
 
-  const nombre = `Levantamiento_${limpio(ses.patio)}_${ses.fecha}.xlsx`;
+  const nombre = `Levantamiento_${limpio(S.repPatio || ses.patio)}_${ses.fecha}.xlsx`;
   XLSX.writeFile(wb, nombre);
+  quitarFiltroReporte();
   toast('Reporte generado');
 }
 const limpio = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9 _.-]/g,'').replace(/\s+/g,'_').slice(0,60);
@@ -1424,6 +1462,7 @@ async function descargarFotos(){
   if(!S.fotos.length){ toast('Todavía no hay fotos'); return; }
   const ok = await cargarLib(CDN.jszip,'JSZip');
   if(!ok){ toast('Necesitas conexión una vez para habilitar el ZIP'); return; }
+  aplicarFiltroReporte();
   toast('Armando el ZIP…');
   const zip = new JSZip();
   const locales = new Map((await store.all('fotos')).map(f=>[f.id,f]));
@@ -1450,7 +1489,8 @@ async function descargarFotos(){
     zip.folder(carpeta).file(nombreArchivo(f), f.blob);
   }
   const blob = await zip.generateAsync({type:'blob'});
-  bajar(blob, `Fotos_${patio}_${USUARIO?limpio(USUARIO)+'_':''}${S.sesion?S.sesion.fecha:hoy()}.zip`);
+  bajar(blob, `Fotos_${limpio(S.repPatio)||patio}_${S.sesion?S.sesion.fecha:hoy()}.zip`);
+  quitarFiltroReporte();
   toast(ajenas ? `ZIP descargado. Faltaron ${ajenas} fotos que no se pudieron bajar: revisa la conexión y vuelve a exportar.` : 'ZIP descargado', 5000);
 }
 function bajar(blob, nombre){
@@ -1640,6 +1680,48 @@ async function crearLevantamientoNube(){
   PADRON_TMP = null; UBIC_SEL = new Set(); COND_COL = null; REGLAS = {};
   toast(`Levantamiento creado con ${filasDB.length} equipos`, 4000);
 }
+async function agregarAlLevantamiento(){
+  if(!SB || !SESION_NUBE || !LEV){ toast('No hay levantamiento activo'); return; }
+  const filas = seleccionActual().filter(r=>r.niv);
+  if(!filas.length) return;
+  toast('Revisando qué falta…');
+  const yaEstan = new Set();
+  const nivs = [...new Set(filas.map(r=>r.niv))];
+  for(let i=0;i<nivs.length;i+=200){
+    const { data, error } = await SB.from('equipos').select('niv')
+      .eq('levantamiento_id', LEV).in('niv', nivs.slice(i,i+200));
+    if(error){ toast('Error al revisar: '+error.message, 5000); return; }
+    (data||[]).forEach(r=>yaEstan.add(r.niv));
+  }
+  const nuevas = filas.filter(r=>!yaEstan.has(r.niv));
+  if(!nuevas.length){ toast('Todos esos equipos ya estaban en el levantamiento'); return; }
+  if(!confirm(`Se agregan ${nuevas.length} equipos a "${LEV_NOMBRE||'el levantamiento activo'}"${yaEstan.size?`, y se omiten ${yaEstan.size} que ya estaban`:''}. ¿Continuar?`)) return;
+
+  const filasDB = nuevas.map(r=>({
+    id: uid(), levantamiento_id: LEV, niv: r.niv, origen:'padron', estado:'pendiente',
+    patio: r.ubicacion||'', clasificacion: (COND_COL && r.extra ? (r.extra[COND_COL]||'') : ''),
+    tipo:r.tipo, marca:r.marca, anio:r.anio, placas:r.placas, ejes:r.ejes,
+    medida_llantas:r.medidaLlantas, padron:r
+  }));
+  for(let i=0;i<filasDB.length;i+=300){
+    const { error } = await SB.from('equipos').insert(filasDB.slice(i,i+300));
+    if(error){ toast('Error al subir: '+error.message, 5000); return; }
+  }
+  const lev = LEVS.find(l=>l.id===LEV);
+  const patiosNuevos = [...new Set(nuevas.map(r=>r.ubicacion).filter(Boolean))];
+  if(lev){
+    const patios = [...new Set([...(lev.patios||[]), ...patiosNuevos])];
+    await SB.from('levantamientos').update({
+      patios, criterio: `${lev.criterio||''}  ||  ${textoCriterio()}`.slice(0,2000)
+    }).eq('id', LEV);
+    await listarLevantamientos();
+  }
+  PADRON_TMP = null; UBIC_SEL = new Set(); COND_COL = null; REGLAS = {};
+  await sincronizar();
+  render();
+  toast(`${filasDB.length} equipos agregados`, 4000);
+}
+
 async function usarLevantamiento(id, limpiar){
   if(limpiar && S.equipos.length){
     if(!confirm('Se reemplaza lo que tengas capturado localmente por el levantamiento de la nube. ¿Continuar?')) return;
