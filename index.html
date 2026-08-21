@@ -250,7 +250,7 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
    ===================================================================== */
 
 /* ------------------------- CATÁLOGOS EDITABLES ---------------------- */
-const APP_VERSION = 'v18 · 20 ago 2026 · nube';
+const APP_VERSION = 'v19 · 20 ago 2026 · nube';
 
 const CAT = {
   patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
@@ -1665,7 +1665,13 @@ const NUBE = {
   bucket: 'fotos-patio'
 };
 let SB = null, SESION_NUBE = null, LEV = null, LEV_NOMBRE = '', LEVS = [];
-const SYNC = {corriendo:false, pendiente:false, ultimo:'', error:'', subiendo:0};
+const SYNC = {corriendo:false, pendiente:false, ultimo:'', error:'', subiendo:0, fallos:[]};
+function resumenFallos(){
+  const g = {};
+  SYNC.fallos.forEach(f=>{ g[f]=(g[f]||0)+1; });
+  return 'No subieron ' + SYNC.fallos.length + ' registros: ' +
+    Object.entries(g).map(([k,n])=>`${n} × ${k}`).join(' · ') + '. Vuelve a intentar con buena señal.';
+}
 
 async function iniciarNube(){
   if(!navigator.onLine && !SB) return false;
@@ -1825,18 +1831,21 @@ function pedirSync(){
 async function sincronizar(){
   if(!SB || !SESION_NUBE || !LEV || !navigator.onLine) return;
   if(SYNC.corriendo){ SYNC.pendiente = true; return; }
-  SYNC.corriendo = true; SYNC.error = ''; pintarNube();
+  SYNC.corriendo = true; SYNC.error = ''; SYNC.fallos = []; pintarNube();
   try{
     await subirEquipos();
     await subirSueltos();
     await subirFotos();
     await bajarCambios();
     SYNC.ultimo = stamp();
+    SYNC.error = SYNC.fallos.length ? resumenFallos() : '';
   }catch(err){
     const m = (err && err.message) || '';
-    SYNC.error = m.includes('foreign key')
-      ? 'El levantamiento al que apunta este dispositivo ya no existe en la nube. Abajo, en la lista, usa «Mover mis capturas a este levantamiento» para pasarlas al bueno. No uses «Usar»: eso borra lo de este aparato.'
-      : (m || 'Falló la sincronización');
+    SYNC.error = m.includes('levantamiento_id_fkey')
+      ? 'El levantamiento al que apunta este dispositivo ya no existe en la nube. Abajo, en la lista, usa «Mover mis capturas a este levantamiento». No uses «Usar»: eso borra lo de este aparato.'
+      : m.includes('Failed to fetch')
+        ? 'Se cortó la conexión a media subida. Con señal estable vuelve a darle Sincronizar; lo que falta sigue guardado aquí.'
+        : (m || 'Falló la sincronización');
   }
   SYNC.corriendo = false; pintarNube(); pintarHeader();
   if(SYNC.pendiente){ SYNC.pendiente = false; setTimeout(()=>sincronizar(), 800); }
@@ -1885,12 +1894,22 @@ async function subirEquipos(){
       adicionales:e.adicionales, gps:e.gps, padron:e.padron,
       capturado_por:e.capturadoPor||USUARIO, capturado_uid:uidUser()
     }));
+    const grupo = sucios.slice(i,i+100);
     const { error } = await SB.from('equipos').upsert(lote, {onConflict:'id'});
-    if(error) throw error;
-    for(const e of sucios.slice(i,i+100)){ e.dirty = false; await store.put('equipos', e); }
+    if(!error){
+      for(const e of grupo){ e.dirty = false; await store.put('equipos', e); }
+      continue;
+    }
+    if((error.message||'').includes('Failed to fetch')) throw error;      // sin red: mejor parar
+    for(let j=0;j<grupo.length;j++){                                       // uno por uno para aislar el malo
+      const { error: e1 } = await SB.from('equipos').upsert([lote[j]], {onConflict:'id'});
+      if(e1){ SYNC.fallos.push('equipo ' + (grupo[j].niv||'sin NIV')); continue; }
+      grupo[j].dirty = false; await store.put('equipos', grupo[j]);
+    }
   }
 }
 async function subirSueltos(){
+  S.sueltos.filter(x=>x.dirty && !x.tipo).forEach(()=>SYNC.fallos.push('adicional suelto sin tipo'));
   const sucios = S.sueltos.filter(x=>x.dirty && x.tipo);
   for(const x of sucios){
     const { error } = await SB.from('sueltos').upsert({
@@ -1899,7 +1918,10 @@ async function subirSueltos(){
       condicion:x.condicion, zona:x.zona, propietario:x.propietario, obs:x.obs,
       capturado_por:x.capturadoPor||USUARIO, capturado_uid:uidUser()
     }, {onConflict:'id'});
-    if(error) throw error;
+    if(error){
+      if((error.message||'').includes('Failed to fetch')) throw error;
+      SYNC.fallos.push('adicional ' + (x.tipo||'')); continue;
+    }
     x.dirty = false; await store.put('sueltos', x);
   }
 }
@@ -1909,16 +1931,27 @@ async function subirFotos(){
   for(const f of porSubir){
     const rec = await store.get('fotos', f.id);
     if(!rec || !rec.blob){ continue; }
+    const padreEq = S.equipos.find(e=>e.id===f.refId);
+    const padreSu = S.sueltos.find(x=>x.id===f.refId);
+    if(!padreEq && !padreSu){ SYNC.fallos.push('foto sin equipo asociado'); SYNC.subiendo--; continue; }
+    if((padreEq && (padreEq.dirty || !padreEq.niv)) || (padreSu && (padreSu.dirty || !padreSu.tipo))){
+      SYNC.fallos.push('foto en espera de su registro'); SYNC.subiendo--; continue;   // se reintenta después
+    }
     const ruta = `${LEV}/${f.refId}/${f.id}.jpg`;
     const { error } = await SB.storage.from(NUBE.bucket).upload(ruta, rec.blob, {contentType:'image/jpeg', upsert:true});
-    if(error) throw error;
-    const esEquipo = S.equipos.some(e=>e.id===f.refId);
+    if(error){
+      if((error.message||'').includes('Failed to fetch')) throw error;
+      SYNC.fallos.push('foto no subida'); SYNC.subiendo--; continue;
+    }
     const { error: e2 } = await SB.from('fotos').upsert({
       id:f.id, levantamiento_id:LEV,
-      equipo_id: esEquipo ? f.refId : null, suelto_id: esEquipo ? null : f.refId,
+      equipo_id: padreEq ? f.refId : null, suelto_id: padreEq ? null : f.refId,
       angulo:f.angulo, ruta, capturado_por:f.disp||USUARIO, capturado_uid:uidUser()
     }, {onConflict:'id'});
-    if(e2) throw e2;
+    if(e2){
+      if((e2.message||'').includes('Failed to fetch')) throw e2;
+      SYNC.fallos.push('foto rechazada'); SYNC.subiendo--; continue;
+    }
     rec.ruta = ruta; rec.dirty = false; await store.put('fotos', rec);
     f.ruta = ruta;
     SYNC.subiendo--; pintarNube();
@@ -2067,7 +2100,7 @@ function tarjetaNube(){
       <tr><td>Sesión</td><td style="font-family:var(--body);font-weight:600">${esc(SESION_NUBE.user.email)}</td></tr>
       <tr><td>Levantamiento</td><td style="font-family:var(--body);font-weight:600">${esc(nombreLev)}</td></tr>
       <tr><td>Equipos descargados</td><td>${S.equipos.length}</td></tr>
-      <tr><td>Sin subir</td><td>${pend}</td></tr>
+      <tr><td>Sin subir</td><td>${pend}${pend?` <span style="font-family:var(--body);font-weight:400;font-size:11px">(${S.equipos.filter(e=>e.dirty).length} eq · ${S.sueltos.filter(x=>x.dirty).length} ad · ${S.fotos.filter(f=>!f.ruta && !f.externa).length} fotos)</span>`:''}</td></tr>
       <tr><td>Última sincronización</td><td style="font-family:var(--body)">${esc(SYNC.ultimo||'—')}</td></tr>
     </table>
     ${SYNC.error?`<div class="banner b-warn" style="margin-top:8px">${esc(SYNC.error)}</div>`:''}
