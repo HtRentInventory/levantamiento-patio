@@ -250,7 +250,7 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
    ===================================================================== */
 
 /* ------------------------- CATÁLOGOS EDITABLES ---------------------- */
-const APP_VERSION = 'v19 · 20 ago 2026 · nube';
+const APP_VERSION = 'v20 · 20 ago 2026 · nube';
 
 const CAT = {
   patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
@@ -525,6 +525,8 @@ function vistaSesion(){
     <h2 class="sec">Nube</h2>
     <div id="nubeBox">${tarjetaNube()}</div>
 
+    ${tarjetaHuerfanas()}
+
     <h2 class="sec">Sesión de levantamiento</h2>
     <div class="card">
       <label>Patio(s) de la visita</label>
@@ -620,6 +622,79 @@ async function infoAlmacenamiento(){
   }
   el.textContent = txt;
 }
+/* ---- Fotos que perdieron a su equipo: reasignarlas a mano ---------- */
+let ASIGNANDO = null, BUSCA_ASIG = '';
+const esHuerfana = f => !S.equipos.some(e=>e.id===f.refId) && !S.sueltos.some(x=>x.id===f.refId);
+function gruposHuerfanas(){
+  const g = {};
+  S.fotos.filter(esHuerfana).forEach(f=>{ (g[f.refId] = g[f.refId] || []).push(f); });
+  return Object.entries(g);
+}
+function tarjetaHuerfanas(){
+  const grupos = gruposHuerfanas();
+  if(!grupos.length) return '';
+  const total = grupos.reduce((n,[,fs])=>n+fs.length,0);
+  return `<h2 class="sec">Fotos sin equipo</h2>
+  <div class="card">
+    <div class="banner b-warn" style="margin-top:0">${total} fotos perdieron el equipo al que pertenecían y por eso no suben.
+      Vienen agrupadas como se tomaron: identifica cada grupo por su imagen y asígnalo al equipo correcto.</div>
+    ${grupos.map(([ref, fs])=>`
+      <div class="add-row">
+        <div class="row"><span class="eyebrow">${fs.length} fotos</span><div class="sp"></div>
+          <span class="count">${esc(fs[0].ts||'')}</span></div>
+        <div class="thumbs" style="margin-top:6px">${fs.slice(0,8).map(f=>
+          f.thumb?`<div class="thumb"><img src="${f.thumb}" alt=""></div>`:'').join('')}</div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn sm primary" onclick="abrirAsignar('${ref}')">Asignar a un equipo</button>
+          <button class="btn sm ghost" onclick="borrarHuerfanas('${ref}')">Eliminar</button>
+        </div>
+        ${ASIGNANDO===ref ? panelAsignar(ref) : ''}
+      </div>`).join('')}
+  </div>`;
+}
+function panelAsignar(ref){
+  const q = norm(BUSCA_ASIG);
+  const cand = S.equipos
+    .filter(e => !q || norm(e.niv).includes(q) || norm(e.placas).includes(q) || norm(e.tipo).includes(q))
+    .sort((a,b)=> (a.estado==='pendiente'?1:0) - (b.estado==='pendiente'?1:0))
+    .slice(0,8);
+  return `<div style="margin-top:10px;border-top:1px solid var(--line);padding-top:8px">
+    <label>Buscar equipo</label>
+    <input id="qAsig" value="${esc(BUSCA_ASIG)}" placeholder="NIV, placas o tipo" oninput="BUSCA_ASIG=this.value;repintarAsignar()">
+    <div id="listaAsig">${cand.length?cand.map(e=>`
+      <button class="item ${e.estado}" style="margin-top:6px" onclick="asignarHuerfanas('${ref}','${e.id}')">
+        <div class="niv">${esc(e.niv)}</div>
+        <div class="meta">${esc([e.tipo,e.marca,e.patioFisico].filter(Boolean).join(' · '))}</div>
+      </button>`).join('') : '<div class="hint">Sin coincidencias.</div>'}</div>
+  </div>`;
+}
+function abrirAsignar(ref){ ASIGNANDO = ASIGNANDO===ref ? null : ref; BUSCA_ASIG=''; vistaSesion(); }
+function repintarAsignar(){
+  const cont = $('#listaAsig'); if(!cont || !ASIGNANDO) return;
+  const tmp = document.createElement('div');
+  tmp.innerHTML = panelAsignar(ASIGNANDO);
+  cont.innerHTML = tmp.querySelector('#listaAsig').innerHTML;
+}
+async function asignarHuerfanas(ref, equipoId){
+  const fs = S.fotos.filter(f=>f.refId===ref);
+  for(const f of fs){
+    const rec = await store.get('fotos', f.id);
+    if(rec){ rec.refId = equipoId; rec.ruta = ''; rec.dirty = true; await store.put('fotos', rec); }
+    f.refId = equipoId; f.ruta = ''; f.externa = false;
+  }
+  ASIGNANDO = null; BUSCA_ASIG = '';
+  const e = S.equipos.find(x=>x.id===equipoId);
+  render(); toast(`${fs.length} fotos asignadas a ${e?e.niv:'el equipo'}`, 4000);
+  sincronizar();
+}
+async function borrarHuerfanas(ref){
+  const fs = S.fotos.filter(f=>f.refId===ref);
+  if(!confirm(`Se eliminan ${fs.length} fotos de este dispositivo. ¿Continuar?`)) return;
+  for(const f of fs) await store.del('fotos', f.id);
+  S.fotos = S.fotos.filter(f=>f.refId!==ref);
+  render(); toast('Fotos eliminadas');
+}
+
 async function guardarDatosSesion(){
   recordar('patios', $('#sPatio').value.trim());
   S.sesion = { patio:$('#sPatio').value.trim(), fecha:$('#sFecha').value||hoy(),
@@ -1867,6 +1942,11 @@ async function reconciliarIds(){
       if(!local) continue;
       const viejo = local.id;
       if(S.equipos.some(e=>e.id===row.id)){          // ya lo tengo bajado: el local sobra
+        for(const f of S.fotos.filter(f=>f.refId===viejo)){   // sus fotos pasan al bueno
+          const rec = await store.get('fotos', f.id);
+          if(rec){ rec.refId = row.id; await store.put('fotos', rec); }
+          f.refId = row.id;
+        }
         S.equipos = S.equipos.filter(e=>e.id!==viejo);
         await store.del('equipos', viejo);
         continue;
