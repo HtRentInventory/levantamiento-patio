@@ -260,7 +260,7 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
    ===================================================================== */
 
 /* ------------------------- CATÁLOGOS EDITABLES ---------------------- */
-const APP_VERSION = 'v21 · 20 ago 2026 · nube';
+const APP_VERSION = 'v22 · 21 ago 2026 · nube';
 
 const CAT = {
   patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
@@ -421,6 +421,7 @@ async function cargarTodo(){
   S.sesion = (kv && kv.v) || null;
   const ku = await store.get('kv','usuario');
   USUARIO = (ku && ku.v) || '';
+  const kpe = await store.get('kv','patiosExtra'); PATIOS_EXTRA = (kpe && kpe.v) || [];
   const kc = await store.get('kv','catalogos');
   if(kc && kc.v) CAT_APRENDIDOS.forEach(k=>{ if(Array.isArray(kc.v[k])) CAT[k]=kc.v[k]; });
   S.equipos = await store.all('equipos');
@@ -751,8 +752,9 @@ function pintarFicha(){
     <h2 class="sec">Identificación</h2>
     <div class="card">
       <label>NIV (17 caracteres)</label>
-      <input class="mono" id="fNiv" value="${esc(e.niv)}" maxlength="17" autocapitalize="characters" placeholder="3H3V532C0PT123456">
+      <input class="mono" id="fNiv" value="${esc(e.niv)}" maxlength="24" autocapitalize="characters" placeholder="3H3V532C0PT123456">
       <div id="fNivAviso"></div>
+      ${e.origen==='manual' ? `<button class="btn sm ghost" style="margin-top:6px" onclick="sinNivLegible()">No se distingue el NIV</button>` : ''}
       <label>Placas</label>
       <input id="fPlacas" value="${esc(e.placas)}" autocapitalize="characters">
       <label>Tipo de equipo</label>
@@ -766,7 +768,7 @@ function pintarFicha(){
       </div>
       <div class="grid2">
         <div><label>Patio donde está</label>
-          <select id="fPatio">${opcionesPatio(e.patioFisico || patioPorDefecto())}</select></div>
+          <select id="fPatio" onchange="if(this.value==='__otro__') otroPatio('fPatio')">${opcionesPatio(e.patioFisico || patioPorDefecto())}</select></div>
         <div><label>Zona / posición</label><input id="fZona" value="${esc(e.zona)}" placeholder="Zona 3, fila B"></div>
       </div>
       <label>Nuevo o usado</label>
@@ -803,14 +805,16 @@ function pintarFicha(){
     ${e.origen==='manual'?`<button class="btn ghost wide" onclick="borrarEquipo()">Eliminar este registro</button>`:''}
     <div style="height:24px"></div>`;
   $('#fNiv').oninput = ev => {
-    const v = ev.target.value.toUpperCase().replace(/[^A-Z0-9]/g,''); ev.target.value = v;
+    const v = ev.target.value.toUpperCase().replace(/[^A-Z0-9-]/g,''); ev.target.value = v;
+    if(v.startsWith('SIN-NIV')){ $('#fNivAviso').innerHTML = ''; return; }
     $('#fNivAviso').innerHTML = v && v.length!==17 ? `<div class="hint" style="color:var(--warn)">Lleva ${v.length} de 17 caracteres.</div>` : '';
   };
 }
 /* Los patios salen del propio levantamiento: nada de texto libre que
    termine escrito de tres formas distintas. */
+let PATIOS_EXTRA = [];
 function patiosDelLevantamiento(){
-  const set = new Set();
+  const set = new Set(PATIOS_EXTRA);
   S.equipos.forEach(e=>{ if(e.patioFisico) set.add(e.patioFisico); });
   S.equipos.forEach(e=>{ const u = e.padron && e.padron.ubicacion; if(u) set.add(u); });
   if(S.sesion && S.sesion.patio) S.sesion.patio.split(' + ').forEach(p=>{ if(p.trim()) set.add(p.trim()); });
@@ -826,7 +830,32 @@ function opcionesPatio(sel){
   const ps = patiosDelLevantamiento();
   const lista = (sel && !ps.some(p=>norm(p)===norm(sel))) ? [sel, ...ps] : ps;
   return `<option value="">— Seleccionar —</option>` +
-    lista.map(p=>`<option value="${esc(p)}"${norm(p)===norm(sel)?' selected':''}>${esc(p)}</option>`).join('');
+    lista.map(p=>`<option value="${esc(p)}"${norm(p)===norm(sel)?' selected':''}>${esc(p)}</option>`).join('') +
+    `<option value="__otro__">+ Otro patio…</option>`;
+}
+async function otroPatio(idSelect){
+  const v = (prompt('Nombre del patio, tal como lo manejan en el inventario:') || '').trim();
+  const el = $('#'+idSelect);
+  if(!v){ el.value = ''; return; }
+  if(!PATIOS_EXTRA.some(p=>norm(p)===norm(v)) && !patiosDelLevantamiento().some(p=>norm(p)===norm(v))){
+    PATIOS_EXTRA.push(v);
+    await store.put('kv',{k:'patiosExtra', v:PATIOS_EXTRA});
+  }
+  el.innerHTML = opcionesPatio(v);
+  el.value = v;
+}
+
+/* Para equipos cuyo NIV no se puede leer en patio: se registra con folio
+   provisional para no perder las fotos ni el hallazgo. */
+function sinNivLegible(){
+  const usados = S.equipos.map(e=>norm(e.niv)).filter(v=>v.startsWith('SIN NIV'));
+  let n = 1;
+  while(usados.includes(norm('SIN-NIV-'+String(n).padStart(3,'0')))) n++;
+  const folio = 'SIN-NIV-' + String(n).padStart(3,'0');
+  $('#fNiv').value = folio;
+  const obs = $('#fObs');
+  if(obs && !obs.value.includes('NIV')) obs.value = (obs.value ? obs.value+' · ' : '') + 'NIV ilegible en patio, pendiente de identificar';
+  $('#fNivAviso').innerHTML = `<div class="hint" style="color:var(--warn)">Queda como ${folio}. Cuando lo identifiquen, corrige el NIV aquí mismo.</div>`;
 }
 
 function pintarAdicionales(e){
@@ -866,7 +895,8 @@ function leerCampos(){
   e.tipo=$('#fTipo').value.trim(); e.marca=$('#fMarca').value.trim();
   recordar('tipos', e.tipo); recordar('marcas', e.marca);
   e.anio=$('#fAnio').value.trim(); e.ejes=$('#fEjes').value.trim(); e.medidaLlantas=$('#fMedida').value.trim();
-  e.zona=$('#fZona').value.trim(); e.patioFisico=$('#fPatio').value; e.clasificacion=$('#fClase').value.trim();
+  e.zona=$('#fZona').value.trim(); e.clasificacion=$('#fClase').value.trim();
+  const vp = $('#fPatio').value; e.patioFisico = (vp==='__otro__') ? e.patioFisico : vp;
   e.capturadoPor = usuarioActual() || e.capturadoPor;
   e.estatusFisico=$('#fEstFis').value; e.obs=$('#fObs').value.trim();
   if($('#fMotivo')) e.motivoFaltante=$('#fMotivo').value;
@@ -1039,7 +1069,7 @@ function pintarSuelto(){
         <div><label>Zona en patio</label><input id="uZona" value="${esc(s.zona)}" placeholder="Bodega, zona 2"></div>
       </div>
       <label>Patio</label>
-      <select id="uPatio">${opcionesPatio(s.patio || patioPorDefecto())}</select>
+      <select id="uPatio" onchange="if(this.value==='__otro__') otroPatio('uPatio')">${opcionesPatio(s.patio || patioPorDefecto())}</select>
       <label>Origen / propietario</label>
       <input id="uProp" value="${esc(s.propietario)}" placeholder="HT, JJ, 3C, cliente, sin identificar">
       <label>Observaciones</label>
@@ -1059,7 +1089,8 @@ function leerSuelto(){
   s.medida=$('#uMedida').value.trim(); s.cantidad=parseInt($('#uCant').value)||0; s.unidad=$('#uUnidad').value;
   s.condicion=$('#uCond').value; s.zona=$('#uZona').value.trim(); s.propietario=$('#uProp').value.trim();
   s.obs=$('#uObs').value.trim(); s.ts = s.ts || stamp();
-  s.patio = $('#uPatio') ? $('#uPatio').value : s.patio;
+  const vps = $('#uPatio') ? $('#uPatio').value : s.patio;
+  s.patio = (vps==='__otro__') ? s.patio : vps;
   s.capturadoPor = s.capturadoPor || usuarioActual();
   return s;
 }
@@ -1540,7 +1571,8 @@ async function generarExcel(){
     ['No localizados (faltantes)', c.faltante],
     ['Excedentes no listados', c.excedente],
     ['Sin revisar', c.pendiente],
-    ['Total físico en patio', c.encontrado + c.excedente],[],
+    ['Total físico en patio', c.encontrado + c.excedente],
+    ['En patio distinto al del sistema', S.equipos.filter(movido).length],[],
     ['FÍSICO POR PATIO'], ...Object.entries(porPatio).sort((a,b)=>b[1]-a[1]),[],
     ['FÍSICO POR NUEVO / USADO'], ...Object.entries(porClase).sort((a,b)=>b[1]-a[1]),[],
     ['FÍSICO POR TIPO DE EQUIPO'], ...Object.entries(porTipo).sort((a,b)=>b[1]-a[1]),[],
@@ -1554,12 +1586,12 @@ async function generarExcel(){
 
   /* --- Equipos --- */
   const estLbl = {pendiente:'SIN REVISAR',encontrado:'ENCONTRADO',faltante:'FALTANTE',excedente:'EXCEDENTE'};
-  const hEq = ['Estado','Origen','Patio','NIV','Nuevo o usado','Tipo','Marca','Año','Placas','Ejes','Medida llanta',
+  const hEq = ['Estado','Origen','Patio','Patio distinto al sistema','NIV','Nuevo o usado','Tipo','Marca','Año','Placas','Ejes','Medida llanta',
     'Zona en patio','Estatus físico','Adicionales (detalle)','Piezas adic.','Fotos','Motivo faltante','Observaciones',
     'Capturó','Fecha captura','GPS','Ubicación en sistema','Cliente','Estatus asignación','Estatus entrega'];
   const rEq = S.equipos.map(e=>{
     const pd = e.padron||{};
-    return [estLbl[e.estado], e.origen==='padron'?'Listado':'Manual', e.patioFisico, e.niv, e.clasificacion, e.tipo, e.marca,
+    return [estLbl[e.estado], e.origen==='padron'?'Listado':'Manual', e.patioFisico, movido(e)?'SÍ':'', e.niv, e.clasificacion, e.tipo, e.marca,
       e.anio, e.placas, e.ejes, e.medidaLlantas, e.zona, e.estatusFisico,
       e.adicionales.map(a=>`${a.tipo} (${a.cantidad})`).join('; '),
       e.adicionales.reduce((s,a)=>s+(+a.cantidad||0),0), contarFotos(e.id), e.motivoFaltante, e.obs,
@@ -1567,7 +1599,7 @@ async function generarExcel(){
       pd.ubicacion||'', pd.cliente||'', pd.estatusAsignacion||'', pd.estatusEntrega||''];
   });
   const wsE = XLSX.utils.aoa_to_sheet([hEq,...rEq]);
-  wsE['!cols']=[{wch:13},{wch:9},{wch:20},{wch:20},{wch:14},{wch:20},{wch:12},{wch:7},{wch:11},{wch:6},{wch:13},
+  wsE['!cols']=[{wch:13},{wch:9},{wch:20},{wch:12},{wch:20},{wch:14},{wch:20},{wch:12},{wch:7},{wch:11},{wch:6},{wch:13},
     {wch:16},{wch:24},{wch:40},{wch:11},{wch:7},{wch:26},{wch:40},{wch:14},{wch:18},{wch:20},{wch:20},{wch:24},{wch:20},{wch:20}];
   wsE['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:rEq.length,c:hEq.length-1}})};
   XLSX.utils.book_append_sheet(wb, wsE, 'Equipos');
@@ -1595,6 +1627,14 @@ async function generarExcel(){
   wsS['!cols']=[{wch:22},{wch:28},{wch:14},{wch:14},{wch:10},{wch:9},{wch:16},{wch:18},{wch:20},{wch:7},{wch:36},{wch:18}];
   XLSX.utils.book_append_sheet(wb, wsS, 'Adicionales sueltos');
 
+  /* --- Cambios de patio --- */
+  const mov = S.equipos.filter(movido).map(e=>[
+    e.niv, e.tipo, e.marca, (e.padron&&e.padron.ubicacion)||'', e.patioFisico, e.zona,
+    (e.padron&&e.padron.cliente)||'', (e.padron&&e.padron.estatusEntrega)||'', e.capturadoPor, e.obs]);
+  const wsM = XLSX.utils.aoa_to_sheet([['NIV','Tipo','Marca','Patio en el sistema','Patio donde está','Zona','Cliente','Estatus entrega','Capturó','Observaciones'],...mov]);
+  wsM['!cols']=[{wch:20},{wch:20},{wch:12},{wch:22},{wch:22},{wch:16},{wch:24},{wch:20},{wch:14},{wch:40}];
+  XLSX.utils.book_append_sheet(wb, wsM, 'Cambios de patio');
+
   /* --- Índice de fotos --- */
   const rF = S.fotos.map(f=>{
     const e = S.equipos.find(x=>x.id===f.refId), s = S.sueltos.find(x=>x.id===f.refId);
@@ -1608,6 +1648,12 @@ async function generarExcel(){
   XLSX.writeFile(wb, nombre);
   quitarFiltroReporte();
   toast('Reporte generado');
+}
+/* Está físicamente en un patio distinto al que dice el inventario */
+function movido(e){
+  const sis = (e.padron && e.padron.ubicacion) || '';
+  return e.origen==='padron' && e.estado!=='pendiente' && e.estado!=='faltante'
+      && sis && e.patioFisico && norm(sis) !== norm(e.patioFisico);
 }
 const limpio = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9 _.-]/g,'').replace(/\s+/g,'_').slice(0,60);
 function nombreArchivo(f){
