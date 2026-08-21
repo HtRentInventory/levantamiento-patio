@@ -260,7 +260,7 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
    ===================================================================== */
 
 /* ------------------------- CATÁLOGOS EDITABLES ---------------------- */
-const APP_VERSION = 'v22 · 21 ago 2026 · nube';
+const APP_VERSION = 'v23 · 21 ago 2026 · nube';
 
 const CAT = {
   patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
@@ -671,7 +671,9 @@ function panelAsignar(ref){
     .sort((a,b)=> (a.estado==='pendiente'?1:0) - (b.estado==='pendiente'?1:0))
     .slice(0,8);
   return `<div style="margin-top:10px;border-top:1px solid var(--line);padding-top:8px">
-    <label>Buscar equipo</label>
+    <button class="btn primary wide sm" onclick="crearEquipoParaFotos('${ref}')">+ Crear equipo nuevo para estas fotos</button>
+    <p class="hint">Para lo que no venía en el listado: se registra como excedente y ahí eliges el patio donde está.</p>
+    <label>O búscalo en la lista</label>
     <input id="qAsig" value="${esc(BUSCA_ASIG)}" placeholder="NIV, placas o tipo" oninput="BUSCA_ASIG=this.value;repintarAsignar()">
     <div id="listaAsig">${cand.length?cand.map(e=>`
       <button class="item ${e.estado}" style="margin-top:6px" onclick="asignarHuerfanas('${ref}','${e.id}')">
@@ -687,6 +689,27 @@ function repintarAsignar(){
   tmp.innerHTML = panelAsignar(ASIGNANDO);
   cont.innerHTML = tmp.querySelector('#listaAsig').innerHTML;
 }
+/* Las fotos son de algo que no estaba en el listado: se crea el equipo
+   como excedente y se le cuelgan, para luego capturar sus datos. */
+async function crearEquipoParaFotos(ref){
+  const fs = S.fotos.filter(f=>f.refId===ref);
+  const e = nuevoEquipo({
+    origen:'manual', estado:'excedente',
+    patioFisico: patioPorDefecto(),
+    capturadoPor: usuarioActual(), ts: stamp()
+  });
+  S.equipos.push(e);
+  await store.put('equipos', e);
+  for(const f of fs){
+    const rec = await store.get('fotos', f.id);
+    if(rec){ rec.refId = e.id; rec.ruta = ''; rec.dirty = true; await store.put('fotos', rec); }
+    f.refId = e.id; f.ruta = ''; f.externa = false;
+  }
+  ASIGNANDO = null; BUSCA_ASIG = '';
+  toast(`${fs.length} fotos enganchadas. Captura el NIV y el patio.`, 5000);
+  abrirFicha(e.id);
+}
+
 async function asignarHuerfanas(ref, equipoId){
   const fs = S.fotos.filter(f=>f.refId===ref);
   for(const f of fs){
