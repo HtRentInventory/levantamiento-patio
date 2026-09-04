@@ -260,7 +260,7 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
    ===================================================================== */
 
 /* ------------------------- CATÁLOGOS EDITABLES ---------------------- */
-const APP_VERSION = 'v24 · 21 ago 2026 · nube';
+const APP_VERSION = 'v25 · 4 sep 2026 · nube';
 
 const CAT = {
   patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
@@ -322,6 +322,22 @@ function progreso(texto, sub){
   cajaProg.innerHTML = `<b>${esc(texto)}</b>${sub?`<br><span style="opacity:.8;font-size:12.5px">${esc(sub)}</span>`:''}`;
 }
 function cerrarProgreso(){ if(cajaProg){ cajaProg.remove(); cajaProg = null; } }
+
+function preguntar(texto, aceptar='Continuar'){
+  return new Promise(res=>{
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(11,17,22,.75);z-index:400;display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML = `<div style="background:var(--panel);border-radius:12px;max-width:420px;width:100%;padding:18px">
+      <div style="font-size:14.5px;line-height:1.5;white-space:pre-line">${esc(texto)}</div>
+      <div class="btnrow" style="margin-top:16px">
+        <button class="btn ghost" data-no>Cancelar</button>
+        <button class="btn primary" data-si>${esc(aceptar)}</button>
+      </div></div>`;
+    ov.querySelector('[data-no]').onclick = ()=>{ ov.remove(); res(false); };
+    ov.querySelector('[data-si]').onclick = ()=>{ ov.remove(); res(true); };
+    document.body.appendChild(ov);
+  });
+}
 
 function toast(msg, ms=2400){
   const t = document.createElement('div'); t.className='toast'; t.textContent = msg;
@@ -1893,7 +1909,7 @@ async function entrarNube(){
 async function salirNube(){
   if(!SB) return;
   const pend = pendientes();
-  if(pend && !confirm(`Tienes ${pend} registros sin subir. Si cierras sesión no se van a sincronizar hasta que vuelvas a entrar. ¿Continuar?`)) return;
+  if(pend && !(await preguntar(`Tienes ${pend} registros sin subir. Si cierras sesión no se sincronizan hasta que vuelvas a entrar.`, 'Cerrar sesión'))) return;
   await SB.auth.signOut(); SESION_NUBE = null; render();
 }
 
@@ -1949,7 +1965,7 @@ async function agregarAlLevantamiento(){
   }
   const nuevas = filas.filter(r=>!yaEstan.has(r.niv));
   if(!nuevas.length){ toast('Todos esos equipos ya estaban en el levantamiento'); return; }
-  if(!confirm(`Se agregan ${nuevas.length} equipos a "${LEV_NOMBRE||'el levantamiento activo'}"${yaEstan.size?`, y se omiten ${yaEstan.size} que ya estaban`:''}. ¿Continuar?`)) return;
+  if(!(await preguntar(`Se agregan ${nuevas.length} equipos a "${LEV_NOMBRE||'el levantamiento activo'}"${yaEstan.size?`, y se omiten ${yaEstan.size} que ya estaban`:''}.`, 'Agregar'))) return;
 
   const filasDB = nuevas.map(r=>({
     id: uid(), levantamiento_id: LEV, niv: r.niv, origen:'padron', estado:'pendiente',
@@ -1977,9 +1993,18 @@ async function agregarAlLevantamiento(){
 }
 
 async function usarLevantamiento(id, limpiar){
+  const l0 = LEVS.find(x=>x.id===id);
   if(limpiar && S.equipos.length){
-    if(!confirm('Se reemplaza lo que tengas capturado localmente por el levantamiento de la nube. ¿Continuar?')) return;
+    const pend = pendientes();
+    const ok = await preguntar(
+      `Vas a cambiar a "${l0?l0.nombre:'este levantamiento'}".\n\n` +
+      (pend ? `Tienes ${pend} registros SIN SUBIR: se van a perder. Cancela y sincroniza primero.\n\n`
+            : 'Tu cola está en cero, no se pierde nada.\n\n') +
+      'Se limpia lo de este dispositivo y se descarga la lista del levantamiento elegido.',
+      pend ? 'Cambiar de todos modos' : 'Cambiar');
+    if(!ok) return;
   }
+  toast('Cambiando de levantamiento…');
   if(limpiar){
     for(const st of ['equipos','sueltos','fotos']) await store.clear(st);
     S.equipos=[]; S.sueltos=[]; S.fotos=[];
@@ -1995,7 +2020,9 @@ async function usarLevantamiento(id, limpiar){
   }
   suscribirVivo();
   await sincronizar();
+  await listarLevantamientos();
   render();
+  toast(`${LEV_NOMBRE||'Levantamiento'} · ${S.equipos.length} equipos`, 4000);
 }
 
 /* --------------------------- Sincronización -------------------------- */
@@ -2215,7 +2242,7 @@ async function eliminarLevantamiento(){
 async function moverAqui(id){
   const l = LEVS.find(x=>x.id===id);
   const capturados = S.equipos.filter(e=>e.estado!=='pendiente');
-  if(!confirm(`Se pasan ${capturados.length} equipos capturados${S.sueltos.length?` y ${S.sueltos.length} adicionales sueltos`:''} a "${l?l.nombre:'este levantamiento'}".\n\nLos equipos que aún no revisas se descartan y se vuelve a bajar la lista buena. ¿Continuar?`)) return;
+  if(!(await preguntar(`Se pasan ${capturados.length} equipos capturados${S.sueltos.length?` y ${S.sueltos.length} adicionales sueltos`:''} a "${l?l.nombre:'este levantamiento'}".\n\nLos equipos que aún no revisas se descartan y se vuelve a bajar la lista buena.`, 'Mover'))) return;
   toast('Moviendo capturas…');
 
   const conservar = new Set(capturados.map(e=>e.id));
@@ -2248,7 +2275,7 @@ async function moverAqui(id){
 
 async function bajarTodo(){
   if(!SB || !SESION_NUBE || !LEV){ toast('Sin levantamiento activo'); return; }
-  if(pendientes() && !confirm(`Tienes ${pendientes()} registros sin subir. Se suben primero y luego se baja todo. ¿Continuar?`)) return;
+  if(pendientes() && !(await preguntar(`Tienes ${pendientes()} registros sin subir. Se suben primero y luego se baja todo.`, 'Continuar'))) return;
   await store.put('kv',{k:'ultimoPull', v:null});
   toast('Descargando…');
   await sincronizar();
@@ -2338,8 +2365,8 @@ async function cambiarEstadoLev(id, estado){
 }
 async function borrarLev(id){
   const l = LEVS.find(x=>x.id===id);
-  if(!confirm(`Se borra de la nube "${l?l.nombre:'este levantamiento'}" con todos sus equipos, adicionales y fotos, para todos. ¿Continuar?`)) return;
-  if(!confirm('Última confirmación: no se puede deshacer.')) return;
+  if(!(await preguntar(`Se borra de la nube "${l?l.nombre:'este levantamiento'}" con todos sus equipos, adicionales y fotos, para todos.`, 'Eliminar'))) return;
+  if(!(await preguntar('Última confirmación: no se puede deshacer.', 'Sí, eliminar'))) return;
   const { error } = await SB.from('levantamientos').delete().eq('id', id);
   if(error){ toast('No se pudo borrar: '+error.message, 5000); return; }
   if(id === LEV){
