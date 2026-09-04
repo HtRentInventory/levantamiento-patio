@@ -250,6 +250,7 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
 </section>
 
 <input type="file" id="fileFoto" accept="image/*" capture="environment" multiple class="hidden">
+<input type="file" id="fileGaleria" accept="image/*" multiple class="hidden">
 <input type="file" id="fileExcel" accept=".xlsx,.xlsm,.xls,.csv" class="hidden">
 <input type="file" id="fileJson" accept=".json" class="hidden">
 
@@ -260,7 +261,7 @@ table.mini td:last-child{text-align:right;font-family:var(--mono);font-weight:70
    ===================================================================== */
 
 /* ------------------------- CATÁLOGOS EDITABLES ---------------------- */
-const APP_VERSION = 'v25 · 4 sep 2026 · nube';
+const APP_VERSION = 'v26 · 4 sep 2026 · nube';
 
 const CAT = {
   patios: ["Patio HT (Monterrey)","Patio JJ (Monterrey)","Monterrey - Forza","Monterrey - Tractomundo",
@@ -836,6 +837,11 @@ function pintarFicha(){
     <div class="card">
       <div class="angles">${CAT.angulos.map(a=>botonAngulo(e.id,a)).join('')}</div>
       <div class="thumbs" id="thumbsEq">${pintarThumbs(e.id)}</div>
+      <div class="row" style="margin-top:10px">
+        <select id="angGal" style="flex:1">${opciones(CAT.angulos,'Otra')}</select>
+        <button class="btn sm" onclick="pedirGaleria('${e.id}','angGal')">Desde galería</button>
+      </div>
+      <p class="hint">Para fotos que te compartieron y no tomaste tú, por ejemplo de un patio en resguardo ajeno.</p>
     </div>
 
     ${e.estado==='faltante'?`<div class="card"><label>Motivo por el que no se localizó</label>
@@ -993,7 +999,7 @@ function pedirFoto(refId, ang){
   fotoDestino = {refId, refTipo, angulo:ang};
   $('#fileFoto').value=''; $('#fileFoto').click();
 }
-$('#fileFoto').onchange = async ev => {
+async function recibirImagenes(ev){
   const files = Array.from(ev.target.files||[]); if(!files.length || !fotoDestino) return;
   toast('Procesando foto…');
   for(const file of files){
@@ -1007,7 +1013,16 @@ $('#fileFoto').onchange = async ev => {
     }catch(err){ toast('No se pudo procesar una imagen'); }
   }
   refrescarFotos();
-};
+}
+$('#fileFoto').onchange = recibirImagenes;
+$('#fileGaleria').onchange = recibirImagenes;
+/* Fotos que ya existían: las manda el patio en resguardo, no se toman aquí */
+function pedirGaleria(refId, idSelect){
+  const refTipo = S.equipos.some(e=>e.id===refId) ? 'equipo' : 'suelto';
+  const sel = $('#'+idSelect);
+  fotoDestino = {refId, refTipo, angulo: sel ? sel.value : 'Otra'};
+  $('#fileGaleria').value=''; $('#fileGaleria').click();
+}
 function refrescarFotos(){
   if(S.fichaId){
     const e = fichaActual();
@@ -1118,6 +1133,10 @@ function pintarSuelto(){
     <div class="card">
       <div class="angles">${angs.map(a=>botonAngulo(s.id,a)).join('')}</div>
       <div class="thumbs" id="thumbsSu">${pintarThumbs(s.id)}</div>
+      <div class="row" style="margin-top:10px">
+        <select id="angGalSu" style="flex:1">${opciones(CAT.angulosSuelto,'Otra')}</select>
+        <button class="btn sm" onclick="pedirGaleria('${s.id}','angGalSu')">Desde galería</button>
+      </div>
     </div>
     <div style="height:24px"></div>`;
 }
